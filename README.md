@@ -1,30 +1,42 @@
 # Permit desk
 
-A responsive MyBuildingPermit inspection tracker. Starts with Bellevue **26 112569 BR** and Kirkland **LSM25-02028**. Enter a jurisdiction and exact permit number to pull another permit. The permit list is session-only.
+MyBuildingPermit inspection tracker with grey **Available**, yellow **Pending**, and green **Passed** statuses. Includes Bellevue **26 112569 BR** and Kirkland **LSM25-02028**, status filters, source links, dates, original results and inspection history.
 
-## Run
+## GitHub Pages
 
-Requires Node 22.13+ and npm.
+The Pages build is a static React app. GitHub Actions fetches public permit data hourly, on pushes, or when manually started. The site shows each permit's actual data timestamp. Source updates and scheduled Actions can be delayed. Reloading the website loads the latest published snapshot, not a new upstream request.
+
+Use **Add permit** to enter a jurisdiction and exact permit number. The app opens a prefilled GitHub issue. Submit it as the repository owner/member/collaborator; the workflow validates it, fetches all data, persists the permit in `permits.json`, then deploys the site. Outside contributors cannot change tracked permits. You can also edit `permits.json` directly. A failed upstream fetch leaves the previous deployment intact and the workflow shows the error. An invalid new permit is not committed.
+
+GitHub repository creation and Pages activation still require a valid GitHub login. Once the repo exists, select **Settings → Pages → Build and deployment → GitHub Actions**. Push this checkout to `main` to trigger deployment. The workflow sets its own repository URL from `GITHUB_REPOSITORY`, so forks work too. Pages site visibility follows GitHub settings and plan availability.
+
+## Development and tests
+
+Use Node 24 and npm.
 
 ```sh
-npm install
-npm run dev
-npm run build
-node --test tests/inspections.test.ts
+npm ci
+npm test
+npm run typecheck
+npm run sync
+npm run build:pages
+npx vite preview --config vite.pages.config.ts
 ```
 
-## Live sources
+`npm run dev` runs the optional Vinext server version, which pulls data on demand and lets you add permits for the current session. `npm run build` builds that Worker version. The Sites scaffold registration is retained in `.openai/hosting.json`; no Sites deployment is required for GitHub Pages.
 
-The server reads public MyBuildingPermit JSON feeds: inspection scheduling (`api/Default/Permits`, `api/InspectionDetails/AvailableInspections`, `api/InspectionDetails/GetScheduledInspections`) and public permit results (`PermitDetails/PermitInspections/{number}/{jurisdiction}`). No MyBuildingPermit username, password, browser cookies, or API credentials are required or stored. Do not commit credentials.
+Tests cover status precedence, duplicate history, versioned Kirkland names, same-day completed inspections, future reinspections, restrictions, date parsing, permit validation, request authorization and upstream failures. CI runs tests and type checking before deployment and on pull requests.
 
-Grey means available to request. Yellow means scheduled, partial, corrections, restricted, or another unresolved result. Green means approved, passed, or completed. Original statuses and history remain visible. Latest calendar-date results supersede older attempts. Same-day completed results supersede a stale scheduled feed; a later scheduled inspection reopens a passed item. Kirkland catalog tooltips match versioned history names. Exact duplicate history rows are removed.
+## Data and status rules
 
-Catalog availability does not mean an inspection is required. MyBuildingPermit can delay updates. Public feeds are undocumented and may change; failures appear explicitly rather than silently showing incomplete data. All four feeds must succeed before returning data. Upstream results are cached for 30 seconds, with bounded entries and concurrent requests. No scheduling or cancellation endpoints are called.
+Public source feeds:
+- `inspection.mybuildingpermit.com/api/Default/Permits`
+- `inspection.mybuildingpermit.com/api/InspectionDetails/AvailableInspections`
+- `inspection.mybuildingpermit.com/api/InspectionDetails/GetScheduledInspections`
+- `permitsearch.mybuildingpermit.com/PermitDetails/PermitInspections/{number}/{jurisdiction}`
 
-## Deployment
+No MyBuildingPermit username, password, browser cookie or account token is needed or stored. Only public permit data is fetched. Scheduling and cancellation endpoints are never called. Browser requests cannot call these feeds directly because they do not provide cross-origin access; the GitHub workflow performs those reads.
 
-Vinext and Cloudflare Workers, managed by Sites. The site is published privately. `.openai/hosting.json` contains only the site identifier and binding declarations. The app exposes an optional `refresh_permit_inspections` WebMCP tool when supported by the browser.
+Available means offered for scheduling, not necessarily required. Pending includes scheduled, partial, corrections, restricted and other unresolved results. Passed includes approved, passed and completed. Latest dated results supersede older attempts; a same-day completed record supersedes a stale scheduled feed. Future reinspections reopen an older pass. Kirkland catalog tooltips match versioned history descriptions. Exact duplicate history rows are removed. These public feeds are undocumented and can change.
 
-## GitHub
-
-This checkout is ready for a private GitHub repository named `permit-inspection-tracker`. GitHub creation requires a valid GitHub CLI login. No account credential is bundled with the source.
+The optional WebMCP refresh tool uses the same read path as the visible reload button. In GitHub Pages it reloads published data; in server mode it fetches upstream data (cached for 30 seconds).
