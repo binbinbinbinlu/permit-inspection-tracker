@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.event_name != 'issues' || (startsWith(github.event.issue.title, 'Add permit: ') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    if: >-
+      github.event_name != 'issues' || (startsWith(github.event.issue.title, 'Add permit: ') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,12 +31,14 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - name: Add requested permit
-        if: github.event_name == 'issues'
+        if: >-
+      github.event_name == 'issues'
         run: node scripts/add-permit.ts
       - run: npm run sync
       - run: npm run build:pages
       - name: Save validated permit configuration
-        if: github.event_name == 'issues'
+        if: >-
+      github.event_name == 'issues'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -60,3 +63,4 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
