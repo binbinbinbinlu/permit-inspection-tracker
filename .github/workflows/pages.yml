@@ -36,6 +36,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run sync
         env:
+          REDMOND_USERNAME: ${{ secrets.REDMOND_USERNAME }}
+          REDMOND_PASSWORD: ${{ secrets.REDMOND_PASSWORD }}
           MEDINA_USERNAME: ${{ secrets.MEDINA_USERNAME }}
           MEDINA_PASSWORD: ${{ secrets.MEDINA_PASSWORD }}
       - run: npm run build:pages

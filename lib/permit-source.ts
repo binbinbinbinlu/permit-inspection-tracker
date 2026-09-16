@@ -9,7 +9,7 @@ async function rows(url:string):Promise<Record<string,unknown>[]> {
  return data;
 }
 export async function loadPermit(city:string,number:string):Promise<PermitData> {
- if(city==='Clyde Hill'||city==='Medina') throw new Error('This jurisdiction’s inspections refresh through the GitHub Pages hourly sync. Open the published tracker for the latest snapshot.');
+ if(city==='Clyde Hill'||city==='Medina'||city==='Redmond') throw new Error('This jurisdiction’s inspections refresh through the GitHub Pages hourly sync. Open the published tracker for the latest snapshot.');
  const j=jurisdictions[city]; const q=new URLSearchParams({jurisdictionId:String(j),permitNumber:number});
  const [permits,available,scheduled,history]=await Promise.all([
  rows(`https://inspection.mybuildingpermit.com/api/Default/Permits?${q}&permitSearch=true`),

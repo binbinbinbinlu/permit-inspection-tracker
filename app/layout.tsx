@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Permit desk | Inspection tracker', description: 'Available, pending, and passed MyBuildingPermit, Clyde Hill PermitTrax, and Medina SmartGov inspections in one clear view.',
+  title: 'Permit desk | Inspection tracker', description: 'Available, pending, and passed MyBuildingPermit, Clyde Hill PermitTrax, Medina SmartGov, and Redmond Civic Access inspections in one clear view.',
 };
 
 export default function RootLayout({

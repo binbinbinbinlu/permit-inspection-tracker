@@ -1,6 +1,6 @@
 # Permit desk
 
-MyBuildingPermit, Clyde Hill PermitTrax, and Medina SmartGov inspection tracker with grey **Available**, yellow **Pending**, and green **Passed** statuses. Includes Bellevue **26 112569 BR** and Kirkland **LSM25-02028**, status filters, source links, dates, original results and inspection history.
+MyBuildingPermit, Clyde Hill PermitTrax, Medina SmartGov, and Redmond Civic Access inspection tracker with grey **Available**, yellow **Pending**, and green **Passed** statuses. Includes Bellevue **26 112569 BR** and Kirkland **LSM25-02028**, status filters, source links, dates, original results and inspection history.
 
 ## GitHub Pages
 
@@ -53,10 +53,16 @@ The hourly GitHub job uses a headless Chromium reader for PermitTrax’s public 
 
 Blank checklist rows with a scheduling calendar appear grey. DONE/COMPLETE rows appear green unless their latest dated result is unresolved; scheduled, restricted, corrections and unknown states appear yellow. Original dated results and comments remain visible in inspection history. A source format change or missing history fails the refresh and preserves the last published site. PermitTrax does not expose a detail permalink here, so Open permit links to its search page.
 
-The optional Worker API supports MyBuildingPermit only; Clyde Hill and Medina refresh run in the GitHub Pages job, where Chromium is available.
+The optional Worker API supports MyBuildingPermit only; Clyde Hill, Medina and Redmond refresh run in the GitHub Pages job, where Chromium is available.
 
 ## Medina SmartGov
 
 B-26-012 is included. The refresh job signs in using the encrypted repository Actions secrets `MEDINA_USERNAME` and `MEDINA_PASSWORD`. Set them through GitHub Settings → Secrets and variables → Actions. They are passed only to the sync step, never the frontend build, snapshot, or repository. Browser sessions are ephemeral and no storage state is saved. If login or account access fails, the previous published snapshot remains intact.
 
 The reader extracts the selected permit’s project name, location and inspection checklist, including dated statuses and links to original result reports. Reports and source permit links require SmartGov sign-in. It does not request or cancel inspections. Choose Medina in Add permit and provide the exact number and SmartGov permit link; the number must match the linked record.
+
+## Redmond Civic Access
+
+BLDG-2025-07156 and CGP-2025-07539 are included. The refresh job signs in through Tyler Identity using encrypted `REDMOND_USERNAME` and `REDMOND_PASSWORD` repository Actions secrets. These credentials are available only to the refresh step. No tokens, browser storage state or login diagnostics are published. If account verification requirements change, refresh fails and the previous snapshot remains live.
+
+The reader searches an exact permit number, collects all existing, remaining and optional inspection pages, and opens each inspection’s checklist for its original comments and completion date. Scheduling controls are never activated. Completed approvals supersede older corrections; later scheduled or correction records stay pending, and reinspection flags remain pending. “Inspection Not Required” is shown green with its original label. The source permit’s hold notice is displayed when present. Select Redmond in Add permit to request another permit by number.
