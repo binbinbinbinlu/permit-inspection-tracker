@@ -1,8 +1,14 @@
-import {day,passed,type Inspection,type Status} from './inspections.ts';
+import {clean,day,passed,type Inspection,type Status} from './inspections.ts';
 export const redmondHome='https://cityofredmondwa-energovweb.tylerhost.net/apps/selfservice#/home';
 export const redmondBase=redmondHome.split('#')[0];
 export type EnergovAvailable={name:string;reinspection:boolean;requestable:boolean};
 export type EnergovHistory={id:string;name:string;status:string;date:string;time:string;inspector:string;notes:string;url:string};
+export function parseEnergovChecklist(input:unknown):{total:number;loaded:number;notes:string}{
+ const data=input as {StatusCode?:number;Success?:boolean;Result?:{CheckListItem?:unknown;Comments?:unknown}[]|null;TotalFound?:number};
+ if(data?.StatusCode===204&&data.Result===null)return {total:0,loaded:0,notes:''};
+ if(!data?.Success||!Array.isArray(data.Result)||!Number.isInteger(data.TotalFound)||data.TotalFound!<data.Result.length||data.Result.some(r=>typeof r.CheckListItem!=='string'||(r.Comments!=null&&typeof r.Comments!=='string')))throw Error('Redmond returned invalid checklist data.');
+ return {total:data.TotalFound!,loaded:data.Result.length,notes:data.Result.filter(r=>clean(r.Comments)).map(r=>`${clean(r.CheckListItem)}: ${clean(r.Comments)}`).join('\n')};
+}
 const key=(s:string)=>s.trim().replace(/\s+/g,' ').toLowerCase();
 const resolved=(s:string)=>passed(s)||/^Inspection Not Required$/i.test(s);
 function timestamp(item:EnergovHistory){

@@ -1,5 +1,5 @@
 import {chromium,type Page} from 'playwright';
-import {redmondHome,redmondBase,normalizeEnergov,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
+import {redmondHome,redmondBase,normalizeEnergov,parseEnergovChecklist,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
 import type {PermitData} from '../lib/inspections.ts';
 
 async function idle(page:Page){
@@ -80,6 +80,12 @@ export async function loadRedmondPermit(number:string):Promise<PermitData>{
   for(const item of existing){
    step=`inspection history ${history.length+1}/${existing.length}`;
    if(!item.url.startsWith(redmondBase+'#/inspectionDetail/inspection/'))throw Error('Redmond returned an invalid inspection link.');
+   const inspectionId=item.url.split('/').at(-1);
+   // Observe only this inspection's checklist read, not identity or unrelated responses.
+   const checklist=page.context().waitForEvent('response',{predicate:response=>{
+    if(new URL(response.url()).pathname!=='/apps/selfservice/api/energov/entity/checklist/search')return false;
+    try{return response.request().postDataJSON()?.EntityId===inspectionId;}catch{return false;}
+   }}).then(response=>response.json()).then(parseEnergovChecklist).catch(()=>null);
    // Open from the signed-in permit tab so Civic Access's tab-scoped session follows.
    const opened=page.waitForEvent('popup');
    await page.evaluate(url=>{window.open(url,'_blank');},item.url);
@@ -93,12 +99,10 @@ export async function loadRedmondPermit(number:string):Promise<PermitData>{
    const name=item.cells[1],status=await value(detail,'label-InspectionDetail-StatusName');
    const date=await value(detail,'label-InspectionDetail-ActualEndDate')||await value(detail,'label-InspectionDetail-ScheduledDate');
    const time=await value(detail,'label-InspectionDetail-ActualEndTime'),inspector=await value(detail,'label-InspectionDetail-AssignedInspectorName');
-   // Civic Access omits this tab when the inspection has no public checklist notes.
-   await detail.getByRole('tab',{name:'Locations',exact:true}).waitFor();
-   let notes='';
-   // The checklist-permission request can finish after the record header renders.
-   await detail.locator('#button-TabButton-CheckList').waitFor({state:'visible',timeout:5000}).catch(error=>{if(error.name!=='TimeoutError')throw error;});
-   if(await detail.locator('#button-TabButton-CheckList').isVisible()) {
+   const result=await checklist;
+   if(!result)throw Error('Redmond checklist response was unavailable or invalid.');
+   let notes=result.notes;
+   if(result.loaded<result.total) {
     await detail.locator('#button-TabButton-CheckList').click();await idle(detail);
     notes=(await tableRows(detail,'selfServiceTable-CheckList')).map(r=>r.cells[3]?`${r.cells[0]}: ${r.cells[3]}`:'').filter(Boolean).join('\n');
    }

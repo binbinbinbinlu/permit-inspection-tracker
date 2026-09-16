@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeEnergov,type EnergovHistory} from '../lib/energov.ts';
+import {normalizeEnergov,parseEnergovChecklist,type EnergovHistory} from '../lib/energov.ts';
 import {validatePermit} from '../lib/permit-request.ts';
 const history:EnergovHistory={id:'inspection-1',name:'BLDG Footings/Setback',status:'Approved',date:'08/04/2026',time:'9:00 AM',inspector:'Inspector',notes:'Approved after corrections',url:'https://cityofredmondwa-energovweb.tylerhost.net/apps/selfservice#/inspectionDetail/inspection/example'};
 test('Redmond latest approval supersedes corrections and retains original notes',()=>{
@@ -33,4 +33,13 @@ test('duplicate paginated records and incomplete approvals fail closed',()=>{
 });
 test('both Redmond permit types can use the existing add-permit flow',()=>{
  for(const number of ['BLDG-2025-07156','CGP-2025-07539'])assert.deepEqual(validatePermit({city:'Redmond',number}),{city:'Redmond',number});
+});
+test('explicit Redmond no-content response is a valid empty checklist',()=>{
+ assert.deepEqual(parseEnergovChecklist({StatusCode:204,Success:false,Result:null}),{total:0,loaded:0,notes:''});
+});
+test('Redmond checklist response retains comments and pagination totals',()=>{
+ assert.deepEqual(parseEnergovChecklist({StatusCode:200,Success:true,TotalFound:11,Result:[{CheckListItem:'Inspection Comments',Comments:'Not ready '}]}),{total:11,loaded:1,notes:'Inspection Comments: Not ready'});
+});
+test('Redmond checklist errors never masquerade as no comments',()=>{
+ for(const input of [null,{}, {StatusCode:500,Success:false,Result:null},{Success:true,TotalFound:0,Result:[{CheckListItem:'A'}]},{Success:true,TotalFound:1,Result:[{CheckListItem:123}]}])assert.throws(()=>parseEnergovChecklist(input),/invalid/);
 });
