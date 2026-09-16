@@ -1,6 +1,6 @@
 # Permit desk
 
-MyBuildingPermit inspection tracker with grey **Available**, yellow **Pending**, and green **Passed** statuses. Includes Bellevue **26 112569 BR** and Kirkland **LSM25-02028**, status filters, source links, dates, original results and inspection history.
+MyBuildingPermit and Clyde Hill PermitTrax inspection tracker with grey **Available**, yellow **Pending**, and green **Passed** statuses. Includes Bellevue **26 112569 BR** and Kirkland **LSM25-02028**, status filters, source links, dates, original results and inspection history.
 
 ## GitHub Pages
 
@@ -18,12 +18,13 @@ Use Node 24 and npm.
 npm ci
 npm test
 npm run typecheck
+npx playwright install chromium
 npm run sync
 npm run build:pages
 npx vite preview --config vite.pages.config.ts
 ```
 
-`npm run dev` runs the optional Vinext server version, which pulls data on demand and lets you add permits for the current session. `npm run build` builds that Worker version. The Sites scaffold registration is retained in `.openai/hosting.json`; no Sites deployment is required for GitHub Pages.
+`npm run dev` runs the optional Vinext server version, which pulls MyBuildingPermit data on demand and lets you add permits for the current session. `npm run build` builds that Worker version. The Sites scaffold registration is retained in `.openai/hosting.json`; no Sites deployment is required for GitHub Pages.
 
 Tests cover status precedence, duplicate history, versioned Kirkland names, same-day completed inspections, future reinspections, restrictions, date parsing, permit validation, request authorization and upstream failures. CI runs tests and type checking before deployment and on pull requests.
 
@@ -45,3 +46,11 @@ The optional WebMCP refresh tool uses the same read path as the visible reload b
 
 Use the Your permits panel to sort by number, jurisdiction or address. Organize lets each user set nicknames and custom groups, or move permits earlier/later in My order. Group by jurisdiction or custom group to view related permits together. These preferences are stored only in that browser and do not modify the shared permit list or inspection data. New permits are appended after any saved custom order.
 
+
+## Clyde Hill PermitTrax
+
+The hourly GitHub job uses a headless Chromium reader for PermitTrax’s public Blazor search, inspection checklist and comment dialogs. It includes BLD2025-0125 and BLD2025-0083. Choose Clyde Hill in Add permit to request another building permit. No login is required. The reader never schedules inspections.
+
+Blank checklist rows with a scheduling calendar appear grey. DONE/COMPLETE rows appear green unless their latest dated result is unresolved; scheduled, restricted, corrections and unknown states appear yellow. Original dated results and comments remain visible in inspection history. A source format change or missing history fails the refresh and preserves the last published site. PermitTrax does not expose a detail permalink here, so Open permit links to its search page.
+
+The optional Worker API supports MyBuildingPermit only; Clyde Hill refresh runs in the GitHub Pages job, where Chromium is available.

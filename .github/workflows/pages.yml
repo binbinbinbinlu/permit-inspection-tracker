@@ -33,6 +33,7 @@ jobs:
       - name: Add requested permit
         if: github.event_name == 'issues'
         run: node scripts/add-permit.ts
+      - run: npx playwright install --with-deps chromium
       - run: npm run sync
       - run: npm run build:pages
       - name: Save validated permit configuration

@@ -9,6 +9,7 @@ async function rows(url:string):Promise<Record<string,unknown>[]> {
  return data;
 }
 export async function loadPermit(city:string,number:string):Promise<PermitData> {
+ if(city==='Clyde Hill') throw new Error('Clyde Hill inspections refresh through the GitHub Pages hourly sync. Open the published tracker for the latest snapshot.');
  const j=jurisdictions[city]; const q=new URLSearchParams({jurisdictionId:String(j),permitNumber:number});
  const [permits,available,scheduled,history]=await Promise.all([
  rows(`https://inspection.mybuildingpermit.com/api/Default/Permits?${q}&permitSearch=true`),

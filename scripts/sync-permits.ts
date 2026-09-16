@@ -1,5 +1,6 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {loadPermit} from '../lib/permit-source.ts';
+import {loadClydeHillPermit} from './permittrax-source.ts';
 import {validatePermit} from '../lib/permit-request.ts';
 const permits=(JSON.parse(await readFile('permits.json','utf8')) as unknown[]).map(validatePermit);
 const results=[];
@@ -7,7 +8,7 @@ const results=[];
 for(const permit of permits) {
  let result;
  for(let attempt=0;attempt<2;attempt++) {
-  try {result=await loadPermit(permit.city,permit.number);break;}
+  try {result=await (permit.city==='Clyde Hill'?loadClydeHillPermit(permit.number):loadPermit(permit.city,permit.number));break;}
   catch(error){if(attempt===1)throw error;}
  }
  results.push(result);
