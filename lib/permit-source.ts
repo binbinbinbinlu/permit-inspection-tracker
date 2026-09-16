@@ -1,4 +1,5 @@
 import { jurisdictions, mergeInspections, type PermitData, type Available, type Scheduled, type History } from './inspections.ts';
+import {parsePermitDetails} from './permit-details.ts';
 async function rows(url:string):Promise<Record<string,unknown>[]> {
  const response=await fetch(url,{signal:AbortSignal.timeout(45000),headers:{Accept:'application/json'},redirect:'manual'});
  if(!response.ok) throw new Error('MyBuildingPermit is temporarily unavailable. Please try again.');
@@ -20,6 +21,15 @@ export async function loadPermit(city:string,number:string):Promise<PermitData> 
  const permit=permits.find(p=>String(p.PermitNumber).replace(/\s/g,'').toUpperCase()===number.replace(/\s/g,'').toUpperCase());
  if(!permit && !history.length && !available.length && !scheduled.length) throw new Error('No permit found. Check the jurisdiction and exact permit number.');
  for(const record of [...available,...scheduled,...history]) if(typeof record.Description!=='string') throw new Error('The inspection feed format has changed. Open the source permit.');
- return {city,number:String(permit?.PermitNumber||number),project:String(permit?.ProjectName||''),address:String(permit?.Address||''),fetchedAt:new Date().toISOString(),sourceUrl:`https://permitsearch.mybuildingpermit.com/PermitDetails/${encodeURIComponent(number)}/${encodeURIComponent(city)}`,inspections:mergeInspections(available as Available[],scheduled as Scheduled[],history as History[])};
+ const sourceUrl=`https://permitsearch.mybuildingpermit.com/PermitDetails/${encodeURIComponent(number)}/${encodeURIComponent(city)}`;
+ let address=String(permit?.Address||'').trim(),project=String(permit?.ProjectName||'').trim();
+ if(!address){
+  const response=await fetch(sourceUrl,{signal:AbortSignal.timeout(45000),redirect:'manual'});
+  if(!response.ok)throw Error('MyBuildingPermit permit details are temporarily unavailable.');
+  const html=await response.text();
+  if(html.length>4000000)throw Error('The permit details response is too large.');
+  const details=parsePermitDetails(html,city,number);address=details.address;project=project||details.project;
+ }
+ return {city,number:String(permit?.PermitNumber||number),project,address,fetchedAt:new Date().toISOString(),sourceUrl,inspections:mergeInspections(available as Available[],scheduled as Scheduled[],history as History[])};
 }
 
