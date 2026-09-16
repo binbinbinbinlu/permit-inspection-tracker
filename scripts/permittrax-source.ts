@@ -10,13 +10,15 @@ export async function loadClydeHillPermit(number:string):Promise<PermitData> {
  try {
   const page=await browser.newPage();
   page.setDefaultTimeout(60000);
+  // Consent can arrive after navigation, including while the search form is opening.
+  await page.addLocatorHandler(page.getByRole('button',{name:/^decline$/i}),async button=>{await button.click();});
   await page.goto(clydeHillUrl,{waitUntil:'domcontentloaded'});
   await page.locator('button').filter({hasText:'CLICK TO SEARCH'}).waitFor();
   // First-time visitors may have a consent dialog hiding the page from accessibility.
   const decline=page.getByRole('button',{name:'Decline',exact:true});
   if(await decline.isVisible()) await decline.click();
   await page.getByRole('button',{name:/click to search/i}).click();
-  await page.getByRole('textbox').first().fill(number);
+  await page.locator('input[name="citizenSearch.search_text"]').fill(number);
   await page.locator('button').filter({hasText:/^\s*SEARCH\s*$/i}).click();
   const match=page.getByRole('link',{name:number,exact:true});
   await match.waitFor();
