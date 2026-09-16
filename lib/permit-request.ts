@@ -1,13 +1,20 @@
 import { jurisdictions } from './inspections.ts';
-export function validatePermit(input:unknown):{city:string;number:string} {
+import {medinaPermitUrl} from './smartgov.ts';
+export type PermitRequest={city:string;number:string;sourceId?:string};
+export function validatePermit(input:unknown):PermitRequest {
  if(!input||typeof input!=='object')throw new Error('Permit request must be an object.');
- const {city,number}=input as Record<string,unknown>;
+ const {city,number,sourceId}=input as Record<string,unknown>;
  if(typeof city!=='string'||!Object.hasOwn(jurisdictions,city)||typeof number!=='string')throw new Error('Invalid jurisdiction or permit number.');
  const normalized=number.trim().toUpperCase();
  if(!normalized||normalized.length>60||!/^[A-Z0-9 -]+$/.test(normalized))throw new Error('Invalid permit number.');
+ if(city==='Medina') {
+  if(typeof sourceId!=='string')throw new Error('Medina requires its SmartGov permit link.');
+  medinaPermitUrl(sourceId);
+  return {city,number:normalized,sourceId:sourceId.toLowerCase()};
+ }
  return {city,number:normalized};
 }
-export function requestUrl(repository:string,permit:{city:string;number:string}) {
+export function requestUrl(repository:string,permit:PermitRequest) {
  if(!/^[\w.-]+\/[\w.-]+$/.test(repository))throw new Error('GitHub repository is not configured.');
  const value=validatePermit(permit);
  return `https://github.com/${repository}/issues/new?${new URLSearchParams({title:`Add permit: ${value.city} ${value.number}`,body:'```json\n'+JSON.stringify(value,null,2)+'\n```'})}`;

@@ -4,7 +4,7 @@ export type Scheduled = { Description: string; InspectionDate: string };
 export type History = { Description: string; Date: string; Status: string; Staff?: string; Notes?: string; DocumentUrl?: string | null };
 export type Inspection = { id: string; name: string; category: string; status: Status; sourceStatus: string; date: string; dates: string[]; restricted: boolean; restriction: string; history: History[] };
 export type PermitData = { number: string; city: string; project: string; address: string; fetchedAt: string; sourceUrl: string; inspections: Inspection[] };
-export const jurisdictions: Record<string, number> = { Auburn:24, Bellevue:1, Burien:11, 'Clyde Hill':0, Edmonds:23, 'Federal Way':25, Issaquah:3, Kenmore:4, 'King County':20, Kirkland:5, 'Mercer Island':6, Sammamish:7, Snoqualmie:9 };
+export const jurisdictions: Record<string, number> = { Auburn:24, Bellevue:1, Burien:11, 'Clyde Hill':0, Medina:0, Edmonds:23, 'Federal Way':25, Issaquah:3, Kenmore:4, 'King County':20, Kirkland:5, 'Mercer Island':6, Sammamish:7, Snoqualmie:9 };
 export const clean = (s: unknown) => String(s ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').trim();
 const key = (s: string) => clean(s).replace(/\s+v\d+$/i,'').replace(/[^a-z0-9]/gi,'').toLowerCase();
 // Compare calendar dates without interpreting a jurisdiction's midnight as UTC.
