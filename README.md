@@ -40,3 +40,8 @@ No MyBuildingPermit username, password, browser cookie or account token is neede
 Available means offered for scheduling, not necessarily required. Pending includes scheduled, partial, corrections, restricted and other unresolved results. Passed includes approved, passed and completed. Latest dated results supersede older attempts; a same-day completed record supersedes a stale scheduled feed. Future reinspections reopen an older pass. Kirkland catalog tooltips match versioned history descriptions. Exact duplicate history rows are removed. These public feeds are undocumented and can change.
 
 The optional WebMCP refresh tool uses the same read path as the visible reload button. In GitHub Pages it reloads published data; in server mode it fetches upstream data (cached for 30 seconds).
+
+## Organize permits
+
+Use the Your permits panel to sort by number, jurisdiction or address. Organize lets each user set nicknames and custom groups, or move permits earlier/later in My order. Group by jurisdiction or custom group to view related permits together. These preferences are stored only in that browser and do not modify the shared permit list or inspection data. New permits are appended after any saved custom order.
+

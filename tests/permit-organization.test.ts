@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {defaults,organizePermits,permitKey,movePermit,readOrganization} from '../lib/permit-organization.ts';
+const permits=[{city:'Kirkland',number:'BSF10',address:'20 Main'},{city:'Bellevue',number:'BSF2',address:'3 Main'},{city:'Kirkland',number:'BSF3',address:'10 Main'}];
+test('sorts permit numbers numerically without changing original selection order',()=>{const result=organizePermits(permits,{...defaults,sort:'number'});assert.deepEqual(result[0][1].map(p=>p.number),['BSF2','BSF3','BSF10']);assert.equal(permits[0].number,'BSF10');});
+test('custom ordering retains new permits and ignores stale saved keys',()=>{const result=organizePermits(permits,{...defaults,order:['gone',permitKey(permits[2])]});assert.deepEqual(result[0][1].map(p=>p.number),['BSF3','BSF10','BSF2']);});
+test('custom groups include ungrouped permits',()=>{const groups=organizePermits(permits,{...defaults,group:'custom',groups:{[permitKey(permits[0])]:'Project A'}});assert.deepEqual(groups.map(([name,rows])=>[name,rows.length]),[['Project A',1],['Ungrouped',2]]);});
+test('jurisdiction grouping contains every permit once',()=>{const groups=organizePermits(permits,{...defaults,group:'city'});assert.deepEqual(groups.map(([name,rows])=>[name,rows.length]),[['Bellevue',1],['Kirkland',2]]);});
+test('move handles boundaries and missing keys',()=>{assert.deepEqual(movePermit(['a','b','c'],'b',-1),['b','a','c']);assert.deepEqual(movePermit(['a','b'],'a',-1),['a','b']);assert.deepEqual(movePermit(['a'],'missing',1),['a']);});
+test('restores preferences safely from malformed storage',()=>{assert.deepEqual(readOrganization('{broken'),defaults);const p=readOrganization(JSON.stringify({sort:'bad',group:'custom',order:['a','a',5],labels:{a:7,b:'House'},groups:[]}));assert.equal(p.sort,'custom');assert.deepEqual(p.order,['a']);assert.deepEqual(p.labels,{b:'House'});});
