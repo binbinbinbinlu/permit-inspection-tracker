@@ -9,6 +9,7 @@ try{
  for(const outcome of ['succeeded','failed','unknown']){
   const context=await browser.newContext();const page=await context.newPage();let submits=0;let operation;let scheduled=[];let checks=0;
   const inspections=[{id:'footing',name:'Footing',category:'Building',status:'available',sourceStatus:'Available to request',date:'',dates:['2026-10-01'],restricted:false,restriction:'',history:[]},{id:'final',name:'Final',category:'Building',status:'passed',sourceStatus:'Passed',date:'2026-09-01',dates:[],restricted:true,restriction:'Approved',history:[]}];
+  inspections.push(...Array.from({length:40},(_,i)=>({...inspections[1],id:'passed-'+i,name:'Completed inspection '+i})));
   const permit={city:'Bellevue',number:'26 112569 BR',address:'Mock address',project:'Mock project',fetchedAt:new Date().toISOString(),sourceUrl:'https://example.invalid',inspections};
   await context.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url());
@@ -27,11 +28,13 @@ try{
   await page.goto('http://127.0.0.1:4198');await page.getByLabel('Private management key').fill('mock-only-key');await page.getByRole('button',{name:'Unlock management'}).click();
   const rows=page.locator('.management-row');assert.equal(await rows.filter({hasText:'Final'}).getByRole('button',{name:'Schedule',exact:true}).isDisabled(),true);
   await rows.filter({hasText:'Footing'}).getByRole('button',{name:'Schedule',exact:true}).click();
+  await page.waitForFunction(()=>{const panel=document.querySelector('.action-focus');if(!panel)return false;const box=panel.getBoundingClientRect();return document.activeElement===panel&&box.top>=0&&box.top<innerHeight;});
+  assert.equal(submits,0);
   await page.getByLabel('Date',{exact:true}).selectOption('2026-10-01');await page.getByLabel('Site contact name').fill('Mock Contact');await page.getByLabel('Phone (10 digits)').fill('2065550100');await page.getByLabel('Email',{exact:true}).fill('mock@example.invalid');await page.getByRole('button',{name:'Review request — does not submit'}).click();
   const confirm=page.getByRole('button',{name:'Confirm scheduling'});await confirm.waitFor();assert.equal(submits,0);assert.equal(await confirm.isDisabled(),true);
   await page.getByRole('checkbox').check();await confirm.click();await page.getByText(operation.message,{exact:true}).waitFor();assert.equal(submits,1);
   if(outcome==='unknown'){await page.getByRole('button',{name:'Check result (does not resubmit)'}).click();assert.equal(submits,1);assert.equal(checks,1);assert.equal(await rows.filter({hasText:'Footing'}).getByRole('button',{name:'Schedule',exact:true}).isDisabled(),true);}
-  if(outcome==='succeeded'){await page.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('button',{name:'Review cancellation'}).click();await page.getByRole('button',{name:'Review request — does not submit'}).click();await page.getByRole('button',{name:'Confirm cancellation'}).waitFor();assert.equal(submits,1);assert.equal(await page.getByRole('button',{name:'Confirm cancellation'}).isDisabled(),true);await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Confirm cancellation'}).click();await page.getByText('Cancelled — confirmed in MBP.',{exact:true}).waitFor();assert.equal(submits,2);}
+  if(outcome==='succeeded'){await page.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('button',{name:'Review cancellation'}).click();await page.waitForFunction(()=>{const p=document.querySelector('.action-focus');return p===document.activeElement&&p.getBoundingClientRect().top<innerHeight;});await page.getByRole('button',{name:'Review request — does not submit'}).click();await page.getByRole('button',{name:'Confirm cancellation'}).waitFor();assert.equal(submits,1);assert.equal(await page.getByRole('button',{name:'Confirm cancellation'}).isDisabled(),true);await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Confirm cancellation'}).click();await page.getByText('Cancelled — confirmed in MBP.',{exact:true}).waitFor();assert.equal(submits,2);}
   console.log('Mock UI verified:',outcome);await context.close();
  }
 }finally{await browser.close();await server.close();}
