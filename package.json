@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "sync": "node scripts/sync-permits.ts",
     "build:pages": "vite build --config vite.pages.config.ts",
-    "test:ui": "node tests/inspection-management.ui.mjs"
+    "test:ui": "node tests/inspection-management.ui.mjs",
+    "build:actions": "node scripts/build-actions.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

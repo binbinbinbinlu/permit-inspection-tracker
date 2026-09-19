@@ -6,5 +6,5 @@
     "ALLOWED_ORIGIN": "https://binbinbinbinlu.github.io",
     "WRITES_ENABLED": "false"
   },
-  "d1_databases": [{"binding":"DB","database_name":"permit-desk-actions","database_id":"REPLACE_WITH_CREATED_DATABASE_ID"}]
+  "d1_databases": [{"binding":"DB","database_name":"permit-desk-actions","database_id":"0483c506-3ace-48f4-82f2-b664cb78d453"}]
 }

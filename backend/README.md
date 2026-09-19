@@ -1,12 +1,12 @@
 # MBP inspection actions backend
 
-Implementation is not deployed or enabled yet. No real scheduling or cancellation has been used in testing.
+Backend deployed at `https://permit-desk-actions.binbin-0db.workers.dev`. No real scheduling or cancellation has been used in testing.
 
 This Cloudflare Worker uses plain HTTP to MBP, with D1 storing confirmation operations and atomic permit locks. The public GitHub Pages snapshot remains separate. Only permits in `permits.json` with a MyBuildingPermit jurisdiction are accepted. Redeploy this Worker after adding a tracked permit.
 
 ## Deployment
 
-1. Connect the owner's Cloudflare account with Wrangler. Create a D1 database named `permit-desk-actions` and replace `REPLACE_WITH_CREATED_DATABASE_ID` in `backend/wrangler.jsonc` with its ID.
+1. Connect the owner's Cloudflare account with Wrangler. Create a D1 database named `permit-desk-actions` and set its ID in `backend/wrangler.jsonc`. The current database is already configured.
 2. Apply `backend/schema.sql` to that database using `wrangler d1 execute permit-desk-actions --remote --file backend/schema.sql --config backend/wrangler.jsonc`.
 3. Generate a cryptographically random management key of at least 32 characters and save it using `wrangler secret put ADMIN_TOKEN --config backend/wrangler.jsonc`. Deliver the key privately to the owner. Never place it in frontend environment variables, git, workflow logs, URLs, or snapshots.
 4. Deploy with `wrangler deploy --config backend/wrangler.jsonc`. Keep `WRITES_ENABLED=false` while checking authentication and read-only access. This state rejects both review and confirmation requests.
