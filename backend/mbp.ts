@@ -1,7 +1,7 @@
 import {day, mergeInspections, type Available, type Scheduled, type History} from '../lib/inspections.ts';
 export type Target={city:string;number:string;jurisdiction:number};
 export type Offer=Available & {InspectionId:string|null;CancellationPhoneNumber:string|null};
-export type Booking=Scheduled & {UniqueId:string|number;InspectionType:string;ConfirmationNumber:string|number;InspectionCancellable:boolean;CancellationPhoneNumber?:string};
+export type Booking=Scheduled & {UniqueId:string|number;InspectionType:string|null;ConfirmationNumber:string|number|null;InspectionCancellable:boolean;CancellationPhoneNumber?:string};
 export type Live={available:Offer[];scheduled:Booking[];history:History[]};
 export type Intent={kind:'schedule'|'cancel';description:string;date:string;bookingId?:string;name?:string;phone?:string;email?:string;message?:string};
 export type Prepared={target:Target;intent:Intent;body:Record<string,unknown>;label:string};
@@ -13,8 +13,10 @@ export function prepare(target:Target,intent:Intent,live:Live):Prepared {
  const base={jurisdictionId:target.jurisdiction,permitNumber:target.number};
  if(intent.kind==='cancel'){
   const row=live.scheduled.find(r=>String(r.UniqueId)===intent.bookingId&&same(r.Description,intent.description)&&day(r.InspectionDate)===intent.date);
-  if(!row||!row.InspectionCancellable||!row.ConfirmationNumber)throw Error('This inspection cannot be cancelled online. Refresh or contact the jurisdiction.');
-  return {target,intent,label:`Cancel ${row.Description} on ${intent.date}`,body:{...base,inspId:row.UniqueId,confirmationNumber:row.ConfirmationNumber,inspectionDetail:{InspectionType:row.InspectionType,Description:row.Description,InspectionDate:us(intent.date),TimeOfDay:'',MessageToInspector:'',ContactName:'',ContactPhone:'',ContactEmail:''}}};
+  if(!row||row.InspectionCancellable!==true||!['string','number'].includes(typeof row.UniqueId)||!String(row.UniqueId).trim())throw Error('This inspection cannot be cancelled online. Refresh or contact the jurisdiction.');
+  // MBP reads these fields as table-cell text. Bellevue can permit cancellation
+  // with null confirmation/type values; its own form sends empty strings.
+  return {target,intent,label:`Cancel ${row.Description} on ${intent.date}`,body:{...base,inspId:String(row.UniqueId),confirmationNumber:String(row.ConfirmationNumber??''),inspectionDetail:{InspectionType:row.InspectionType??'',Description:row.Description,InspectionDate:us(intent.date),TimeOfDay:'',MessageToInspector:'',ContactName:'',ContactPhone:'',ContactEmail:''}}};
  }
  const row=live.available.find(r=>same(r.Description,intent.description));
  const normalized=mergeInspections(live.available,live.scheduled,live.history).find(r=>same(r.name,intent.description));

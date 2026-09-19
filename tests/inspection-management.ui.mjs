@@ -19,7 +19,7 @@ try{
    if(u.hostname==='mock-backend.invalid'){
     if(u.pathname==='/live')return json({available:[{Description:'Footing',InspectionDates:['2026-10-01'],InspectionRestricted:false}],scheduled,history:[],inspections,fetchedAt:permit.fetchedAt,writesEnabled:true});
     if(u.pathname==='/review'){operation={id:'mock-operation',state:'review',intent:req.postDataJSON().intent,label:'Mock inspection request',message:'Review details. Nothing has been submitted.'};return json(operation);}
-    if(u.pathname==='/confirm'){submits++;operation.state=outcome;operation.message=outcome==='succeeded'?(operation.intent.kind==='cancel'?'Cancelled — confirmed in MBP.':'Scheduled — confirmed in MBP.'):outcome==='failed'?'Date unavailable. Nothing was submitted.':'Result not confirmed. Do not repeat the request.';if(outcome==='succeeded')scheduled=operation.intent.kind==='cancel'?[]:[{UniqueId:'mock-booking',Description:'Footing',InspectionDate:'2026-10-01',InspectionCancellable:true}];return json(operation);}
+    if(u.pathname==='/confirm'){submits++;operation.state=outcome;operation.message=outcome==='succeeded'?(operation.intent.kind==='cancel'?'Cancelled — confirmed in MBP.':'Scheduled — confirmed in MBP.'):outcome==='failed'?'Date unavailable. Nothing was submitted.':'Result not confirmed. Do not repeat the request.';if(outcome==='succeeded')scheduled=operation.intent.kind==='cancel'?[]:[{UniqueId:'mock-booking',Description:'Footing',InspectionDate:'2026-10-01',InspectionType:null,ConfirmationNumber:null,InspectionCancellable:true}];return json(operation);}
     if(u.pathname.startsWith('/operations/')){checks++;return json(operation);}
    }
    if(u.hostname==='127.0.0.1')return route.continue();

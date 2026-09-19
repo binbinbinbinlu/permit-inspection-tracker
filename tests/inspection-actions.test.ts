@@ -8,6 +8,8 @@ const target={city:'Bellevue',number:'26 112569 BR',jurisdiction:1};
 const intent:Intent={kind:'schedule',description:'Footing',date:'2026-10-01',name:'Mock Contact',phone:'2065550100',email:'mock@example.invalid',message:'Mock only'};
 const live:Live={available:[{Description:'Footing',InspectionType:'Building',InspectionDates:['2026-10-01T00:00:00'],InspectionRestricted:false,InspectionId:null,CancellationPhoneNumber:null}],scheduled:[],history:[]};
 const booking={Description:'Footing',InspectionDate:'2026-10-01T00:00:00',UniqueId:'mock-booking',InspectionType:'Building',ConfirmationNumber:'mock-confirmation',InspectionCancellable:true};
+const bellevueBooking={...booking,Description:'415 Elec-Rough In',UniqueId:'21-SEP-26 mock-booking',InspectionDate:'2026-09-21T00:00:00',InspectionType:null,ConfirmationNumber:null};
+const cancelIntent:Intent={kind:'cancel',description:bellevueBooking.Description,date:'2026-09-21',bookingId:bellevueBooking.UniqueId};
 function setup(){
  const records=new Map<string,Operation>();const locks=new Map<string,string>();
  const op:Operation={id:'mock-operation',action:prepare(target,intent,live),state:'review',message:'Review',expires:Date.now()+10000};records.set(op.id,structuredClone(op));
@@ -34,6 +36,32 @@ test('duplicate confirmations submit only once and success requires read-back',a
  const results=await Promise.allSettled([execute(op.id,storage,gateway),execute(op.id,storage,gateway)]);
  assert.equal(posts,1);assert.ok(results.some(r=>r.status==='fulfilled'&&r.value.state==='succeeded'));
  await execute(op.id,storage,gateway);assert.equal(posts,1);
+});
+test('Bellevue cancellation sends empty optional fields just like MBP, using only mocked HTTP',async()=>{
+ const action=prepare(target,cancelIntent,{...live,scheduled:[bellevueBooking]});
+ assert.deepEqual(action.body,{jurisdictionId:1,permitNumber:target.number,inspId:bellevueBooking.UniqueId,confirmationNumber:'',inspectionDetail:{InspectionType:'',Description:'415 Elec-Rough In',InspectionDate:'09/21/2026',TimeOfDay:'',MessageToInspector:'',ContactName:'',ContactPhone:'',ContactEmail:''}});
+ const calls:{url:string;options?:RequestInit}[]=[];
+ const mock=(async(url:unknown,options?:RequestInit)=>{calls.push({url:String(url),options});return calls.length===1?new Response(null,{status:302,headers:{Location:'/InspectionDetails','Set-Cookie':'session=mock; HttpOnly'}}):Response.json({});}) as typeof fetch;
+ await httpGateway(mock).send(action);
+ assert.equal(calls.length,2);assert.ok(calls[1].url.endsWith('/CancelInspection'));
+ assert.equal(calls[1].options?.method,'POST');assert.deepEqual(JSON.parse(calls[1].options?.body as string),action.body);
+});
+test('nullable confirmation does not bypass booking identity, date, description or cancellation permission',()=>{
+ const current={...live,scheduled:[bellevueBooking]};
+ for(const changed of [{bookingId:'other'},{date:'2026-09-22'},{description:'Other inspection'}])assert.throws(()=>prepare(target,{...cancelIntent,...changed},current),/cannot be cancelled/);
+ assert.throws(()=>prepare(target,cancelIntent,{...live,scheduled:[{...bellevueBooking,InspectionCancellable:false}]}),/cannot be cancelled/);
+ assert.throws(()=>prepare(target,{...cancelIntent,bookingId:''},{...live,scheduled:[{...bellevueBooking,UniqueId:''}]}),/cannot be cancelled/);
+});
+test('cancellation confirms read-back, retains uncertainty, and never repeats a submission',async()=>{
+ for(const outcome of ['success','unknown','revoked']){
+  const {op,storage,locks}=setup();op.action=prepare(target,cancelIntent,{...live,scheduled:[bellevueBooking]});await storage.put(op);
+  let posts=0;
+  const gateway:Gateway={async read(){return posts?{...live,history:outcome==='success'?[{Description:bellevueBooking.Description,Date:cancelIntent.date,Status:'Cancelled'}]:[]}:{...live,scheduled:[{...bellevueBooking,InspectionCancellable:outcome!=='revoked'}]};},async send(){posts++;if(outcome==='unknown')throw Error('Mock timeout');}};
+  const result=await execute(op.id,storage,gateway);
+  assert.equal(result.state,outcome==='success'?'succeeded':outcome==='revoked'?'failed':'unknown');
+  assert.equal(posts,outcome==='revoked'?0:1);assert.equal(locks.size,outcome==='unknown'?1:0);
+  await execute(op.id,storage,gateway);await reconcile(result,storage,gateway);assert.equal(posts,outcome==='revoked'?0:1);
+ }
 });
 test('changed restrictions fail before any submission',async()=>{
  const {op,storage}=setup();let posts=0;const result=await execute(op.id,storage,{async read(){return {...live,available:[{...live.available[0],InspectionRestricted:true}]};},async send(){posts++;}});
