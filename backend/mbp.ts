@@ -27,10 +27,18 @@ export function prepare(target:Target,intent:Intent,live:Live):Prepared {
  if((intent.message?.length||0)>100||/[&\[\]{}#']/.test(intent.message||''))throw Error('Inspector messages must be at most 100 characters and cannot contain & [ ] { } # or apostrophes.');
  return {target,intent,label:`Schedule ${row.Description} on ${intent.date}`,body:{...base,inspectionDetails:[{InspectionType:row.InspectionType,Description:row.Description,InspectionId:row.InspectionId,CancellationPhoneNumber:row.CancellationPhoneNumber,InspectionDate:us(intent.date),TimeOfDay:'',MessageToInspector:intent.message||'',ContactName:intent.name.trim(),ContactPhone:Number(intent.phone),ContactEmail:intent.email}]}};
 }
-export function confirmed(action:Prepared,live:Live):boolean {
+export function confirmed(action:Prepared,live:Live,now=new Date()):boolean {
  if(action.intent.kind==='schedule')return live.scheduled.some(r=>same(r.Description,action.intent.description)&&day(r.InspectionDate)===action.intent.date);
- // Absence alone is not proof of cancellation: an inspector may have completed it.
- return !live.scheduled.some(r=>String(r.UniqueId)===action.intent.bookingId)&&live.history.some(r=>same(r.Description,action.intent.description)&&day(r.Date)===action.intent.date&&/^(cancelled|canceled)$/i.test(r.Status));
+ if(live.scheduled.some(r=>String(r.UniqueId)===action.intent.bookingId))return false;
+ if(live.history.some(r=>same(r.Description,action.intent.description)&&day(r.Date)===action.intent.date&&/^(cancelled|canceled)$/i.test(r.Status)))return true;
+ // Bellevue removes cancelled bookings without publishing a history entry.
+ // Require the future slot to be requestable again, not mere absence (which
+ // could also mean an inspection was completed). Use the jurisdiction's day.
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+ return action.intent.date>today
+  &&!live.scheduled.some(r=>same(r.Description,action.intent.description))
+  &&!live.history.some(r=>same(r.Description,action.intent.description)&&day(r.Date)>=action.intent.date)
+  &&live.available.some(r=>same(r.Description,action.intent.description)&&r.InspectionRestricted===false&&r.InspectionDates?.some(d=>day(d)===action.intent.date));
 }
 export function httpGateway(request:typeof fetch=fetch):Gateway {
  const origin='https://inspection.mybuildingpermit.com';

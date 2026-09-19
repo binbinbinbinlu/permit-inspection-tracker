@@ -28,7 +28,7 @@ test('cancellation requires exact current booking and online cancellation permis
  assert.throws(()=>prepare(target,cancel,{...live,scheduled:[{...booking,InspectionCancellable:false}]}),/cannot be cancelled/);
  const action=prepare(target,cancel,{...live,scheduled:[booking]});
  assert.equal(action.body.confirmationNumber,'mock-confirmation');
- assert.equal(confirmed(action,live),false);
+ assert.equal(confirmed(action,{...live,available:[]}),false);
  assert.equal(confirmed(action,{...live,history:[{Description:'Footing',Date:'2026-10-01',Status:'Cancelled'}]}),true);
 });
 test('duplicate confirmations submit only once and success requires read-back',async()=>{
@@ -36,6 +36,21 @@ test('duplicate confirmations submit only once and success requires read-back',a
  const results=await Promise.allSettled([execute(op.id,storage,gateway),execute(op.id,storage,gateway)]);
  assert.equal(posts,1);assert.ok(results.some(r=>r.status==='fulfilled'&&r.value.state==='succeeded'));
  await execute(op.id,storage,gateway);assert.equal(posts,1);
+});
+test('Bellevue cancellation without history requires a reopened future slot and no conflicting records',()=>{
+ const action=prepare(target,cancelIntent,{...live,scheduled:[bellevueBooking]});
+ const offer={...live.available[0],Description:bellevueBooking.Description,InspectionDates:['2026-09-21T00:00:00']};
+ const reopened={...live,available:[offer]};
+ const now=new Date('2026-09-20T20:00:00Z');
+ assert.equal(confirmed(action,reopened,now),true);
+ assert.equal(confirmed(action,{...reopened,available:[]},now),false);
+ assert.equal(confirmed(action,{...reopened,available:[{...offer,InspectionRestricted:true}]},now),false);
+ assert.equal(confirmed(action,{...reopened,available:[{...offer,InspectionDates:['2026-09-22']}]},now),false);
+ assert.equal(confirmed(action,{...reopened,scheduled:[bellevueBooking]},now),false);
+ assert.equal(confirmed(action,{...reopened,scheduled:[{...bellevueBooking,UniqueId:'replacement'}]},now),false);
+ assert.equal(confirmed(action,{...reopened,history:[{Description:offer.Description,Date:cancelIntent.date,Status:'Passed'}]},now),false);
+ assert.equal(confirmed(action,reopened,new Date('2026-09-21T07:00:00Z')),false);
+ assert.equal(confirmed(action,reopened,new Date('2026-09-21T06:59:59Z')),true);
 });
 test('Bellevue cancellation sends empty optional fields just like MBP, using only mocked HTTP',async()=>{
  const action=prepare(target,cancelIntent,{...live,scheduled:[bellevueBooking]});
