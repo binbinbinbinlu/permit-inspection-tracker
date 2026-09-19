@@ -1,16 +1,27 @@
-import {day, mergeInspections, type Available, type Scheduled, type History} from '../lib/inspections.ts';
-export type Target={city:string;number:string;jurisdiction:number};
-export type Offer=Available & {InspectionId:string|null;CancellationPhoneNumber:string|null};
+import {day, mergeInspections, type Available, type Scheduled, type History,type Inspection} from '../lib/inspections.ts';
+export type Target={city:string;number:string;jurisdiction:number;sourceId?:string};
+export type Offer=Available & {InspectionId:string|null;CancellationPhoneNumber:string|null;timeSlots?:{value:string;label:string}[]};
 export type Booking=Scheduled & {UniqueId:string|number;InspectionType:string|null;ConfirmationNumber:string|number|null;InspectionCancellable:boolean;CancellationPhoneNumber?:string};
-export type Live={available:Offer[];scheduled:Booking[];history:History[]};
-export type Intent={kind:'schedule'|'cancel';description:string;date:string;bookingId?:string;name?:string;phone?:string;email?:string;message?:string};
+export type Live={available:Offer[];scheduled:Booking[];history:History[];inspections?:Inspection[];notice?:string};
+export type Intent={kind:'schedule'|'cancel';description:string;date:string;bookingId?:string;name?:string;phone?:string;email?:string;message?:string;timeSlot?:string};
 export type Prepared={target:Target;intent:Intent;body:Record<string,unknown>;label:string};
-export interface Gateway {read(target:Target):Promise<Live>;send(action:Prepared):Promise<void>}
+export interface Gateway {read(target:Target,inspection?:string):Promise<Live>;send(action:Prepared):Promise<void>;close?():Promise<void>}
 const same=(a:string,b:string)=>a.trim()===b.trim();
 const us=(s:string)=>{const [y,m,d]=s.split('-');return `${m}/${d}/${y}`;};
 export function prepare(target:Target,intent:Intent,live:Live):Prepared {
  if(!intent||!['schedule','cancel'].includes(intent.kind)||typeof intent.description!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(intent.date))throw Error('Choose an inspection and date.');
  const base={jurisdictionId:target.jurisdiction,permitNumber:target.number};
+ if(target.jurisdiction===0){
+  if(intent.kind!=='schedule')throw Error('Use the source portal to cancel this inspection.');
+  const offer=live.available.find(r=>same(r.Description,intent.description));
+  const inspection=live.inspections?.find(r=>same(r.name,intent.description));
+  if(!offer||offer.InspectionRestricted!==false||!inspection||inspection.status==='passed'||inspection.restricted)throw Error('This inspection is not available to schedule in the source portal.');
+  if(live.scheduled.some(r=>same(r.Description,intent.description)))throw Error('This inspection already has a booking.');
+  if(!offer.InspectionDates?.some(d=>day(d)===intent.date))throw Error('That date is no longer available. Refresh and choose another date.');
+  if(offer.timeSlots?.length&&!offer.timeSlots.some(s=>s.value===intent.timeSlot))throw Error('Choose an available time slot.');
+  if(!intent.name?.trim()||intent.name.length>100||!/^\d{10}$/.test(intent.phone||'')||!/^\S+@\S+\.\S+$/.test(intent.email||'')||(intent.message?.length||0)>100)throw Error('Enter a contact name, 10-digit phone number, valid email, and a message of at most 100 characters.');
+  return {target,intent,label:`Schedule ${intent.description} on ${intent.date}${offer.timeSlots?.find(s=>s.value===intent.timeSlot)?" · "+offer.timeSlots.find(s=>s.value===intent.timeSlot)!.label:""}`,body:{inspectionId:offer.InspectionId}};
+ }
  if(intent.kind==='cancel'){
   const row=live.scheduled.find(r=>String(r.UniqueId)===intent.bookingId&&same(r.Description,intent.description)&&day(r.InspectionDate)===intent.date);
   if(!row||row.InspectionCancellable!==true||!['string','number'].includes(typeof row.UniqueId)||!String(row.UniqueId).trim())throw Error('This inspection cannot be cancelled online. Refresh or contact the jurisdiction.');
