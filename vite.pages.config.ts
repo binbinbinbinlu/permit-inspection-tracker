@@ -7,6 +7,6 @@ export default defineConfig({
  plugins:[react()],
  resolve:{alias:{'@':fileURLToPath(new URL('.',import.meta.url))}},
  css:{postcss:{plugins:[tailwind()]}},
- define:{'process.env.NEXT_PUBLIC_PAGES_MODE':JSON.stringify('true'),'process.env.NEXT_PUBLIC_GITHUB_REPOSITORY':JSON.stringify(process.env.GITHUB_REPOSITORY||'binbinbinbinlu/permit-inspection-tracker')},
+ define:{'process.env.NEXT_PUBLIC_ACTIONS_URL':JSON.stringify(process.env.NEXT_PUBLIC_ACTIONS_URL||''),'process.env.NEXT_PUBLIC_PAGES_MODE':JSON.stringify('true'),'process.env.NEXT_PUBLIC_GITHUB_REPOSITORY':JSON.stringify(process.env.GITHUB_REPOSITORY||'binbinbinbinlu/permit-inspection-tracker')},
  build:{outDir:'dist-pages'},
 });

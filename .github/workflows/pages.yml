@@ -34,6 +34,7 @@ jobs:
         if: github.event_name == 'issues'
         run: node scripts/add-permit.ts
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
       - run: npm run sync
         env:
           REDMOND_USERNAME: ${{ secrets.REDMOND_USERNAME }}
@@ -41,6 +42,8 @@ jobs:
           MEDINA_USERNAME: ${{ secrets.MEDINA_USERNAME }}
           MEDINA_PASSWORD: ${{ secrets.MEDINA_PASSWORD }}
       - run: npm run build:pages
+        env:
+          NEXT_PUBLIC_ACTIONS_URL: ${{ vars.NEXT_PUBLIC_ACTIONS_URL }}
       - name: Save validated permit configuration
         if: github.event_name == 'issues'
         run: |
