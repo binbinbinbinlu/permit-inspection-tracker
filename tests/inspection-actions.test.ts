@@ -48,7 +48,7 @@ test('timeout retains unknown result and lock; checking never resubmits',async()
 test('expired confirmation never submits',async()=>{const {op,storage}=setup();op.expires=0;await storage.put(op);await assert.rejects(execute(op.id,storage,{async read(){throw Error('must not read');},async send(){throw Error('must not send');}}),/expired/);});
 test('HTTP adapter uses only mocked requests and submits the reviewed payload once',async()=>{
  const calls:{url:string;method:string;body?:string}[]=[];
- const mock=(async(url:unknown,options?:RequestInit)=>{calls.push({url:String(url),method:options?.method||'GET',body:options?.body as string});return calls.length===1?new Response(null,{status:302,headers:{Location:'/InspectionDetails','Set-Cookie':'session=mock; HttpOnly'}}):Response.json({});}) as typeof fetch;
+ const mock=(async(url:unknown,options?:RequestInit)=>{assert.equal(options?.redirect,'manual');calls.push({url:String(url),method:options?.method||'GET',body:options?.body as string});return calls.length===1?new Response(null,{status:302,headers:{Location:'/InspectionDetails','Set-Cookie':'session=mock; HttpOnly'}}):Response.json({});}) as typeof fetch;
  const action=prepare(target,intent,live);await httpGateway(mock).send(action);assert.equal(calls.length,2);assert.equal(calls[1].method,'POST');assert.ok(calls[1].url.endsWith('/ScheduleInspection'));assert.deepEqual(JSON.parse(calls[1].body!),action.body);
 });
 test('backend rejects untrusted origins and unauthenticated requests before storage or upstream use',async()=>{

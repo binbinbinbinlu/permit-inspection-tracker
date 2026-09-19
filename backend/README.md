@@ -1,6 +1,6 @@
 # MBP inspection actions backend
 
-Backend deployed at `https://permit-desk-actions.binbin-0db.workers.dev`. No real scheduling or cancellation has been used in testing.
+Backend deployed at `https://permit-desk-actions.binbin-0db.workers.dev`; authenticated owner-confirmed writes are enabled. No real scheduling or cancellation has been used in testing.
 
 This Cloudflare Worker uses plain HTTP to MBP, with D1 storing confirmation operations and atomic permit locks. The public GitHub Pages snapshot remains separate. Only permits in `permits.json` with a MyBuildingPermit jurisdiction are accepted. Redeploy this Worker after adding a tracked permit.
 

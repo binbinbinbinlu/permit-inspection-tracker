@@ -32,7 +32,7 @@ export function confirmed(action:Prepared,live:Live):boolean {
 }
 export function httpGateway(request:typeof fetch=fetch):Gateway {
  const origin='https://inspection.mybuildingpermit.com';
- async function rows(url:string){const r=await request(url,{signal:AbortSignal.timeout(45000),redirect:'error'});if(!r.ok)throw Error('MBP is unavailable.');const data:unknown=await r.json();if(!Array.isArray(data)||data.some(r=>!r||typeof r.Description!=='string'))throw Error('MBP returned invalid inspection data.');return data;}
+ async function rows(url:string){const r=await request(url,{signal:AbortSignal.timeout(45000),redirect:'manual'});if(!r.ok)throw Error('MBP is unavailable.');const data:unknown=await r.json();if(!Array.isArray(data)||data.some(r=>!r||typeof r.Description!=='string'))throw Error('MBP returned invalid inspection data.');return data;}
  return {
   async read(t){const q=new URLSearchParams({jurisdictionId:String(t.jurisdiction),permitNumber:t.number});const [available,scheduled,history]=await Promise.all([rows(`${origin}/api/InspectionDetails/AvailableInspections?${q}`),rows(`${origin}/api/InspectionDetails/GetScheduledInspections?${q}`),rows(`https://permitsearch.mybuildingpermit.com/PermitDetails/PermitInspections/${encodeURIComponent(t.number)}/${t.jurisdiction}`)]);return {available,scheduled,history};},
   async send(action){
@@ -42,8 +42,9 @@ export function httpGateway(request:typeof fetch=fetch):Gateway {
    const cookie=session.headers.getSetCookie().map(s=>s.split(';')[0]).join('; ');
    if(!cookie)throw Error('MBP did not establish a session.');
    // One POST only. A timeout may mean MBP accepted it, so callers must reconcile, not retry.
-   const r=await request(`${origin}/InspectionDetails/${action.intent.kind==='schedule'?'ScheduleInspection':'CancelInspection'}`,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8',Cookie:cookie},body:JSON.stringify(action.body),signal:AbortSignal.timeout(45000),redirect:'error'});
+   const r=await request(`${origin}/InspectionDetails/${action.intent.kind==='schedule'?'ScheduleInspection':'CancelInspection'}`,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8',Cookie:cookie},body:JSON.stringify(action.body),signal:AbortSignal.timeout(45000),redirect:'manual'});
    if(!r.ok)throw Error('MBP did not acknowledge the request.');
   }
  };
 }
+
