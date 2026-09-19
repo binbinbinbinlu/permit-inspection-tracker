@@ -36,7 +36,7 @@ Public source feeds:
 - `inspection.mybuildingpermit.com/api/InspectionDetails/GetScheduledInspections`
 - `permitsearch.mybuildingpermit.com/PermitDetails/PermitInspections/{number}/{jurisdiction}`
 
-No MyBuildingPermit username, password, browser cookie or account token is needed or stored. MyBuildingPermit feeds are public. Scheduling and cancellation endpoints are never called. Browser requests cannot call these feeds directly because they do not provide cross-origin access; the GitHub workflow performs those reads.
+No MyBuildingPermit username, password, browser cookie or account token is needed or stored. MyBuildingPermit feeds are public. The refresh job never calls scheduling or cancellation endpoints. The separate, authenticated actions backend is described below. Browser requests cannot call these feeds directly because they do not provide cross-origin access; the GitHub workflow performs those reads.
 
 Available means offered for scheduling, not necessarily required. Pending includes scheduled, partial, corrections, restricted and other unresolved results. Passed includes approved, passed and completed. Latest dated results supersede older attempts; a same-day completed record supersedes a stale scheduled feed. Future reinspections reopen an older pass. Kirkland catalog tooltips match versioned history descriptions. Exact duplicate history rows are removed. These public feeds are undocumented and can change.
 
@@ -66,3 +66,7 @@ The reader extracts the selected permit’s project name, location and inspectio
 BLDG-2025-07156 and CGP-2025-07539 are included. The refresh job signs in through Tyler Identity using encrypted `REDMOND_USERNAME` and `REDMOND_PASSWORD` repository Actions secrets. These credentials are available only to the refresh step. No tokens, browser storage state or login diagnostics are published. If account verification requirements change, refresh fails and the previous snapshot remains live.
 
 The reader searches an exact permit number, collects all existing, remaining and optional inspection pages, and opens each inspection’s checklist for its original comments and completion date. Scheduling controls are never activated. Completed approvals supersede older corrections; later scheduled or correction records stay pending, and reinspection flags remain pending. “Inspection Not Required” is shown green with its original label. The source permit’s hold notice is displayed when present. Select Redmond in Add permit to request another permit by number.
+
+## Scheduling and cancellation (implementation awaiting backend deployment)
+
+The optional MBP backend uses HTTP requests and an owner-only management key. Requests require live validation, a review, and explicit confirmation. Passed inspections are greyed out and disabled for scheduling. The website displays confirmed success, preflight failure, or an unconfirmed result and can recheck without resubmitting. No actual inspections were scheduled or cancelled during development; unit and browser tests use mocks only. See [backend setup and behavior](backend/README.md). The backend ships with writes disabled and the frontend cannot submit until a backend URL is configured.

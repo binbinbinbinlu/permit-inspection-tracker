@@ -1,0 +1,10 @@
+{
+  "name": "permit-desk-actions",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "ALLOWED_ORIGIN": "https://binbinbinbinlu.github.io",
+    "WRITES_ENABLED": "false"
+  },
+  "d1_databases": [{"binding":"DB","database_name":"permit-desk-actions","database_id":"REPLACE_WITH_CREATED_DATABASE_ID"}]
+}
