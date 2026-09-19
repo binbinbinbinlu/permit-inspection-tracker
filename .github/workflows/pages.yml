@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
+    inputs:
+      reuse_published_data:
+        description: 'Publish UI changes using the existing snapshot and its original timestamps'
+        type: boolean
+        default: false
   issues:
     types: [opened]
 permissions:
@@ -36,11 +41,15 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
       - run: npm run sync
+        if: ${{ !inputs.reuse_published_data }}
         env:
           REDMOND_USERNAME: ${{ secrets.REDMOND_USERNAME }}
           REDMOND_PASSWORD: ${{ secrets.REDMOND_PASSWORD }}
           MEDINA_USERNAME: ${{ secrets.MEDINA_USERNAME }}
           MEDINA_PASSWORD: ${{ secrets.MEDINA_PASSWORD }}
+      - name: Reuse last published snapshot
+        if: ${{ inputs.reuse_published_data }}
+        run: node scripts/reuse-published-data.mjs
       - run: npm run build:pages
         env:
           NEXT_PUBLIC_ACTIONS_URL: ${{ vars.NEXT_PUBLIC_ACTIONS_URL }}
