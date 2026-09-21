@@ -1,8 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeEnergov,parseEnergovChecklist,type EnergovHistory} from '../lib/energov.ts';
+import {redmondBase,resolveRedmondPermitUrl,normalizeEnergov,parseEnergovChecklist,type EnergovHistory} from '../lib/energov.ts';
 import {validatePermit} from '../lib/permit-request.ts';
 const history:EnergovHistory={id:'inspection-1',name:'BLDG Footings/Setback',status:'Approved',date:'08/04/2026',time:'9:00 AM',inspector:'Inspector',notes:'Approved after corrections',url:'https://cityofredmondwa-energovweb.tylerhost.net/apps/selfservice#/inspectionDetail/inspection/example'};
+
+test('tracked Redmond permits resolve even when portal search is unavailable',async()=>{
+ const unavailable=async():Promise<never>=>{throw Error('Search timed out');};
+ assert.equal(await resolveRedmondPermitUrl('BLDG-2025-07156',unavailable),redmondBase+'#/permit/654d0ef4-261a-4286-9797-b5035c2fc40c');
+ assert.equal(await resolveRedmondPermitUrl('CGP-2025-07539',unavailable),redmondBase+'#/permit/b08eaa7a-8fed-4149-a825-6e0f32f35119');
+});
+
+test('new Redmond permits use search and validate its destination',async()=>{
+ const path='#/permit/11111111-2222-3333-4444-555555555555';let searches=0;
+ assert.equal(await resolveRedmondPermitUrl('BLDG-2026-00001',async()=>{searches++;return path;}),redmondBase+path);
+ assert.equal(searches,1);
+ assert.equal(await resolveRedmondPermitUrl('BLDG-2026-00001',async()=>redmondBase+path),redmondBase+path);
+ for(const href of [null,'https://example.invalid/'+path,redmondBase+'?token=unexpected'+path,'#/permit/invalid','#/inspectionDetail/inspection/11111111-2222-3333-4444-555555555555']){
+  await assert.rejects(resolveRedmondPermitUrl('BLDG-2026-00001',async()=>href),/permit link/);
+ }
+ await assert.rejects(resolveRedmondPermitUrl('BLDG-2026-00001',async()=>{throw Error('Search timed out');}),/Search timed out/);
+});
 test('Redmond latest approval supersedes corrections and retains original notes',()=>{
  const result=normalizeEnergov([],[{...history,id:'old',status:'Correction Required',date:'07/24/2026'},history])[0];
  assert.equal(result.status,'passed');assert.equal(result.history.length,2);assert.equal(result.history[0].Notes,history.notes);assert.equal(result.history[0].DocumentUrl,history.url);

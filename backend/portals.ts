@@ -3,7 +3,7 @@ import type {Gateway,Live,Target,Prepared,Offer,Booking} from './mbp.ts';
 import {day,type Inspection,type History} from '../lib/inspections.ts';
 import {normalizeSmartGov,medinaPermitUrl} from '../lib/smartgov.ts';
 import {normalizePermitTrax,clydeHillUrl} from '../lib/permittrax.ts';
-import {redmondHome,redmondBase,normalizeEnergov} from '../lib/energov.ts';
+import {redmondHome,redmondBase,resolveRedmondPermitUrl,normalizeEnergov} from '../lib/energov.ts';
 
 export type PortalCredentials={username:string;password:string};
 export type BrowserFactory=()=>Promise<Browser>;
@@ -74,9 +74,11 @@ export function portalGateway(launch:BrowserFactory,credentials:PortalCredential
   if(!await p.locator('#link-Greetings:visible').count()){
    step='open sign-in';await p.locator('#link-LoginUnderGreetings:visible').first().click();await p.locator('#modalOkBtn').last().click({force:true});step='enter the account email';await p.getByRole('textbox',{name:'Email address',exact:true}).fill(credentials.username);await p.getByRole('button',{name:'Next',exact:true}).click();step='open password verification';await p.getByRole('button',{name:'Select Password.',exact:true}).click();step='verify sign-in';await p.locator('input[type=password]').fill(credentials.password);await p.getByRole('button',{name:'Verify',exact:true}).click();step='return from sign-in';await p.waitForURL(u=>u.hostname==='cityofredmondwa-energovweb.tylerhost.net'&&u.hash==='#/home');await p.locator('#link-Greetings:visible').first().waitFor();
   }
-  const ids:Record<string,string>={'BLDG-2025-07156':'654d0ef4-261a-4286-9797-b5035c2fc40c','CGP-2025-07539':'b08eaa7a-8fed-4149-a825-6e0f32f35119'};
-  step='load permit details';if(ids[t.number])await p.goto(redmondBase+'#/permit/'+ids[t.number],{waitUntil:'domcontentloaded'});
-  else{await p.goto(redmondBase+'#/search',{waitUntil:'domcontentloaded'});await idle();await p.locator('#SearchKeyword').fill(t.number);await p.locator('#button-Search').click();await p.getByRole('link',{name:t.number,exact:true}).click();}
+   const permitUrl=await resolveRedmondPermitUrl(t.number,async()=>{
+    step='search for the permit';await p.goto(redmondBase+'#/search',{waitUntil:'domcontentloaded'});await idle();await p.locator('#SearchKeyword').fill(t.number);await p.locator('#button-Search').click();
+    const link=p.getByRole('link',{name:t.number,exact:true});await link.waitFor();return link.getAttribute('href');
+   });
+   step='load permit details';await p.goto(permitUrl,{waitUntil:'domcontentloaded'});
   step='verify the permit number';await p.waitForFunction(n=>document.querySelector('#focusText')?.textContent?.includes(n),t.number);await idle();step='open the inspections tab';await p.locator('#button-TabButton-Inspections').click();await idle();step='load the inspection tables';await p.locator('#selfServiceTable-RemainingInspections').waitFor({state:'attached'});step='load the request tab';await p.locator('a').filter({hasText:/^\s*Request Inspections\s*$/}).first().waitFor();await p.waitForLoadState('networkidle');
   const history:Parameters<typeof normalizeEnergov>[1]=[],available:Offer[]=[],choices:Parameters<typeof normalizeEnergov>[0]=[];
   async function rows(id:string,tab:string){step='read '+tab.toLowerCase();

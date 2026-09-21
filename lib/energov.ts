@@ -1,6 +1,19 @@
 import {clean,day,passed,type Inspection,type Status} from './inspections.ts';
 export const redmondHome='https://cityofredmondwa-energovweb.tylerhost.net/apps/selfservice#/home';
 export const redmondBase=redmondHome.split('#')[0];
+// Stable links already used by the actions backend avoid Civic Access's unreliable search.
+const redmondPermitIds:Readonly<Record<string,string>>={
+ 'BLDG-2025-07156':'654d0ef4-261a-4286-9797-b5035c2fc40c',
+ 'CGP-2025-07539':'b08eaa7a-8fed-4149-a825-6e0f32f35119',
+};
+export async function resolveRedmondPermitUrl(number:string,search:()=>Promise<string|null>):Promise<string>{
+ const id=Object.hasOwn(redmondPermitIds,number)?redmondPermitIds[number]:undefined;
+ const href=id?'#/permit/'+id:await search();
+ if(!href)throw Error('Redmond returned no permit link.');
+ const url=new URL(href,redmondBase);
+ if(url.origin!==new URL(redmondBase).origin||url.pathname!==new URL(redmondBase).pathname||url.search||!/^#\/permit\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(url.hash))throw Error('Redmond returned an invalid permit link.');
+ return url.href;
+}
 export type EnergovAvailable={name:string;reinspection:boolean;requestable:boolean};
 export type EnergovHistory={id:string;name:string;status:string;date:string;time:string;inspector:string;notes:string;url:string};
 export function parseEnergovChecklist(input:unknown):{total:number;loaded:number;notes:string}{

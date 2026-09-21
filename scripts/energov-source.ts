@@ -1,5 +1,5 @@
 import {chromium,type Page} from 'playwright';
-import {redmondHome,redmondBase,normalizeEnergov,parseEnergovChecklist,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
+import {redmondHome,redmondBase,resolveRedmondPermitUrl,normalizeEnergov,parseEnergovChecklist,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
 import type {PermitData} from '../lib/inspections.ts';
 
 async function idle(page:Page){
@@ -56,13 +56,15 @@ export async function loadRedmondPermit(number:string):Promise<PermitData>{
   step='returning from sign-in';
   await page.waitForURL(url=>url.hostname==='cityofredmondwa-energovweb.tylerhost.net'&&url.hash==='#/home');
   await page.locator('#link-Greetings:visible').first().waitFor();await idle(page);
-  step='permit search';
+  const url=await resolveRedmondPermitUrl(number,async()=>{
+  step='opening permit search';
   await page.goto(redmondBase+'#/search',{waitUntil:'domcontentloaded'});await idle(page);
+  step='entering permit number';
   await page.locator('#SearchKeyword').fill(number);await page.locator('#button-Search').click();await idle(page);
+  step='waiting for permit search result';
   const link=page.getByRole('link',{name:number,exact:true});await link.waitFor();
-  const sourceUrl=await link.getAttribute('href');
-  if(!sourceUrl||!/^#\/permit\/[a-f0-9-]+$/i.test(sourceUrl.replace(redmondBase,'')))throw Error('Redmond returned an invalid permit link.');
-  const url=new URL(sourceUrl,redmondBase).href;
+  return link.getAttribute('href');
+  });
   step='permit details';
   await page.goto(url,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(number=>document.querySelector('#focusText')?.textContent?.includes(number),number);await idle(page);

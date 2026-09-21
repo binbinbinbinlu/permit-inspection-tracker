@@ -30,7 +30,14 @@ try{
   assert.equal(await page.getByRole('heading',{name:'Request an inspection'}).count(),0);
   await page.waitForFunction(()=>{const panel=document.querySelector('.action-focus');if(!panel)return false;const box=panel.getBoundingClientRect();return document.activeElement===panel&&box.top>=0&&box.top<innerHeight;});
   assert.equal(submits,0);
-  await page.getByLabel('Date',{exact:true}).selectOption('2026-10-01');if(city==='Medina')await page.getByLabel('Time slot',{exact:true}).selectOption('any');await page.getByLabel('Site contact name').fill('Mock Contact');await page.getByLabel('Phone (10 digits)').fill('2065550100');await page.getByLabel('Email',{exact:true}).fill('mock@example.invalid');await page.getByRole('button',{name:'Review request — does not submit'}).click();
+  const phone=page.getByLabel('Phone (10 digits)');
+  await phone.fill('425224039');
+  assert.equal(await phone.evaluate(input=>input.checkValidity()),false);
+  assert.match(await phone.evaluate(input=>input.validationMessage),/10-digit phone number/);
+  await phone.fill('4252240399');
+  assert.equal(await phone.evaluate(input=>input.checkValidity()),true);
+  await page.getByLabel('Date',{exact:true}).selectOption('2026-10-01');if(city==='Medina')await page.getByLabel('Time slot',{exact:true}).selectOption('any');await page.getByLabel('Site contact name').fill('Mock Contact');await page.getByLabel('Phone (10 digits)').fill('\u200B+1 (425) 224-0399\u00A0');await page.getByLabel('Email',{exact:true}).fill('mock@example.invalid');await page.getByRole('button',{name:'Review request — does not submit'}).click();
+  assert.equal(operation.intent.phone,'4252240399');
   const confirm=page.getByRole('button',{name:'Confirm scheduling'});await confirm.waitFor();assert.equal(submits,0);assert.equal(await confirm.isDisabled(),true);
   await page.getByRole('checkbox').check();await confirm.click();await page.getByText(operation.message,{exact:true}).waitFor();assert.equal(submits,1);
   if(outcome==='unknown'){await page.getByRole('button',{name:'Check result (does not resubmit)'}).click();assert.equal(submits,1);assert.equal(checks,1);assert.equal(await rows.filter({hasText:'Footing'}).getByRole('button',{name:'Check request',exact:true}).count(),1);}
