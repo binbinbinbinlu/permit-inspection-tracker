@@ -11,9 +11,11 @@ const results=new Map<string,PermitData>();
 // Check the interactive provider first so a browser failure is reported promptly.
 for(const permit of [...permits].sort((a,b)=>Number(['Clyde Hill','Medina','Redmond'].includes(b.city))-Number(['Clyde Hill','Medina','Redmond'].includes(a.city)))) {
  let result;
- for(let attempt=0;attempt<2;attempt++) {
+ // Redmond owns its bounded retries and safe diagnostics; do not multiply attempts here.
+ const attempts=permit.city==='Redmond'?1:2;
+ for(let attempt=0;attempt<attempts;attempt++) {
   try {result=await (permit.city==='Redmond'?loadRedmondPermit(permit.number):permit.city==='Medina'?loadMedinaPermit(permit.number,permit.sourceId!):permit.city==='Clyde Hill'?loadClydeHillPermit(permit.number):loadPermit(permit.city,permit.number));break;}
-  catch(error){if(attempt===1)throw error;}
+  catch(error){if(attempt===attempts-1)throw error;}
  }
  results.set(`${permit.city}:${permit.number}`,result!);
  console.log(`Synced ${permit.city} ${permit.number}: ${result!.inspections.length} inspection types`);

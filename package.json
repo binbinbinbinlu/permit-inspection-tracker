@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "sync": "node scripts/sync-permits.ts",
     "build:pages": "vite build --config vite.pages.config.ts",
-    "test:ui": "node tests/inspection-management.ui.mjs",
+    "test:ui": "node tests/inspection-management.ui.mjs && node tests/redmond-navigation.ui.mjs",
     "build:actions": "node scripts/build-actions.mjs"
   },
   "dependencies": {
