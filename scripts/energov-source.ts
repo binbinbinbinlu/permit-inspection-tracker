@@ -1,10 +1,11 @@
 import {chromium,type Page} from 'playwright';
 import {redmondHome,redmondBase,resolveRedmondPermitUrl,normalizeEnergov,parseEnergovChecklist,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
 import type {PermitData} from '../lib/inspections.ts';
+import {openRedmondSignIn,openRedmondDetails,withRedmondAttempts,type ReadStep} from './redmond-recovery.ts';
 
 async function idle(page:Page){
  await page.locator('#overlay').waitFor({state:'hidden'});
- if(await page.locator('#globalMessageDialog').isVisible())throw Error('Redmond dialog: '+await page.locator('#globalMessageDialog').innerText());
+ if(await page.locator('#globalMessageDialog').isVisible())throw Error('Redmond displayed a source dialog.');
 }
 async function tableRows(page:Page,id:string):Promise<{cells:string[];url:string;requestable:boolean}[]> {
  await page.waitForLoadState('networkidle');
@@ -41,46 +42,43 @@ const value=async(page:Page,id:string)=>(await page.locator('#'+id).innerText())
 export async function loadRedmondPermit(number:string):Promise<PermitData>{
  const username=process.env.REDMOND_USERNAME?.trim(),password=process.env.REDMOND_PASSWORD?.trim();
  if(!username||!password)throw Error('Redmond refresh requires REDMOND_USERNAME and REDMOND_PASSWORD Actions secrets.');
- const browser=await chromium.launch();let step='sign-in';
+ return withRedmondAttempts(number,step=>readRedmondPermit(number,username,password,step));
+}
+
+async function readRedmondPermit(number:string,username:string,password:string,step:ReadStep):Promise<PermitData>{
+ const browser=await step('browser startup',()=>chromium.launch());
  try {
   const context=await browser.newContext();context.setDefaultTimeout(60000);
   const page=await context.newPage();page.setDefaultTimeout(60000);
-  await page.goto(redmondHome,{waitUntil:'domcontentloaded'});await idle(page);
-  step='opening sign-in';await page.locator('#link-LoginUnderGreetings:visible').first().click();
-  await page.locator('#modalOkBtn').last().click({force:true});
-  step='email verification';await page.getByRole('textbox',{name:'Email address',exact:true}).fill(username);
-  await page.getByRole('button',{name:'Next',exact:true}).click();
-  step='password verification';await page.getByRole('button',{name:'Select Password.',exact:true}).click();
-  await page.locator('input[type="password"]').fill(password);
-  await page.getByRole('button',{name:'Verify',exact:true}).click();
-  step='returning from sign-in';
-  await page.waitForURL(url=>url.hostname==='cityofredmondwa-energovweb.tylerhost.net'&&url.hash==='#/home');
-  await page.locator('#link-Greetings:visible').first().waitFor();await idle(page);
+  if(await openRedmondSignIn(page,step)==='email'){
+   await step('email entry',()=>page.getByRole('textbox',{name:'Email address',exact:true}).fill(username));
+   await step('email next',()=>page.getByRole('button',{name:'Next',exact:true}).click());
+   await step('password selection',()=>page.getByRole('button',{name:'Select Password.',exact:true}).click());
+   await step('password entry',()=>page.locator('input[type="password"]').fill(password));
+   await step('password verify',()=>page.getByRole('button',{name:'Verify',exact:true}).click());
+   await step('sign-in return',()=>page.waitForURL(url=>url.hostname===new URL(redmondHome).hostname&&url.hash==='#/home'));
+  }
+  await step('signed-in readiness',async()=>{await page.locator('#link-Greetings:visible').first().waitFor();await idle(page);});
   const url=await resolveRedmondPermitUrl(number,async()=>{
-  step='opening permit search';
-  await page.goto(redmondBase+'#/search',{waitUntil:'domcontentloaded'});await idle(page);
-  step='entering permit number';
-  await page.locator('#SearchKeyword').fill(number);await page.locator('#button-Search').click();await idle(page);
-  step='waiting for permit search result';
-  const link=page.getByRole('link',{name:number,exact:true});await link.waitFor();
-  return link.getAttribute('href');
+  await step('permit search',async()=>{await page.goto(redmondBase+'#/search',{waitUntil:'domcontentloaded'});await idle(page);});
+  await step('permit search entry',async()=>{await page.locator('#SearchKeyword').fill(number);await page.locator('#button-Search').click();await idle(page);});
+  return step('permit search result',async()=>{const link=page.getByRole('link',{name:number,exact:true});await link.waitFor();return link.getAttribute('href');});
   });
-  step='permit details';
-  await page.goto(url,{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(number=>document.querySelector('#focusText')?.textContent?.includes(number),number);await idle(page);
-  if(!(await page.locator('#focusText').innerText()).includes(number))throw Error('Redmond returned the wrong permit.');
-  const project=await value(page,'label-PermitDetail-ProjectName');
+  const project=await openRedmondDetails(page,url,number,step);
   const notice=await page.getByText('A hold currently exists on this permit.',{exact:true}).isVisible()?'A hold currently exists on this permit. Review Holds in the source portal.':'';
-  step='permit location';await page.locator('#button-TabButton-Locations').click();await idle(page);
-  const address=(await page.locator('#Address_State_Info_0').innerText()).replace(/\s+/g,' ').replace(/\s*,\s*/g,', ').replace(/,\s*$/,'').trim();
-  step='inspection checklist';await page.locator('#button-TabButton-Inspections').click();await idle(page);
+  const address=await step('permit location',async()=>{await page.locator('#button-TabButton-Locations').click();await idle(page);
+   return (await page.locator('#Address_State_Info_0').innerText()).replace(/\s+/g,' ').replace(/\s*,\s*/g,', ').replace(/,\s*$/,'').trim();});
+  const {existing,remaining,optional}=await step('inspection checklist',async()=>{
+  await page.locator('#button-TabButton-Inspections').click();await idle(page);
   const existing=await tableRows(page,'selfServiceTable-ExistingInspections');
   const remaining=await tableRows(page,'selfServiceTable-RemainingInspections');
   const optional=await tableRows(page,'selfServiceTable-OptionalInspections');
+  return {existing,remaining,optional};
+  });
   const available:EnergovAvailable[]=[...remaining,...optional].map(r=>({name:r.cells[0],reinspection:r.cells[1]==='Yes',requestable:r.requestable}));
   const history:EnergovHistory[]=[];
   for(const item of existing){
-   step=`inspection history ${history.length+1}/${existing.length}`;
+   await step('inspection history',async()=>{
    if(!item.url.startsWith(redmondBase+'#/inspectionDetail/inspection/'))throw Error('Redmond returned an invalid inspection link.');
    const inspectionId=item.url.split('/').at(-1);
    // Observe only this inspection's checklist read, not identity or unrelated responses.
@@ -110,13 +108,10 @@ export async function loadRedmondPermit(number:string):Promise<PermitData>{
    }
    history.push({id:item.url,name,status,date,time,inspector,notes,url:item.url});
    } finally {await detail.close();}
+   });
   }
-  const inspections=normalizeEnergov(available,history);
+  const inspections=await step('normalization',async()=>normalizeEnergov(available,history));
   if(!inspections.length)throw Error('Redmond returned no inspections.');
   return {city:'Redmond',number,project,address,notice,sourceUrl:url,fetchedAt:new Date().toISOString(),inspections};
- } catch(error) {
-  // Never include identity-provider URLs, tokens, or filled credentials in diagnostics.
-  const kind=error instanceof Error?error.name:'Error';
-  throw Error(`Redmond could not complete ${step} for ${number} (${kind}). Check source availability and saved account access.`);
  } finally {await browser.close();}
 }
