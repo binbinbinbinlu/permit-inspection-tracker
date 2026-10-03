@@ -1,11 +1,11 @@
 import {chromium,type Page} from 'playwright';
 import {redmondHome,redmondBase,resolveRedmondPermitUrl,normalizeEnergov,parseEnergovChecklist,type EnergovAvailable,type EnergovHistory} from '../lib/energov.ts';
 import type {PermitData} from '../lib/inspections.ts';
-import {openRedmondSignIn,openRedmondDetails,withRedmondAttempts,type ReadStep} from './redmond-recovery.ts';
+import {openRedmondSignIn,openRedmondDetails,withRedmondAttempts,checkRedmondSourceDialog,type ReadStep} from './redmond-recovery.ts';
 
 async function idle(page:Page){
  await page.locator('#overlay').waitFor({state:'hidden'});
- if(await page.locator('#globalMessageDialog').isVisible())throw Error('Redmond displayed a source dialog.');
+ await checkRedmondSourceDialog(page);
 }
 async function tableRows(page:Page,id:string):Promise<{cells:string[];url:string;requestable:boolean}[]> {
  await page.waitForLoadState('networkidle');

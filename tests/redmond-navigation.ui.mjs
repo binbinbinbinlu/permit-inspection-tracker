@@ -1,7 +1,7 @@
 // All network requests are fulfilled locally. No portal, login, or booking is contacted.
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
-import {openRedmondSignIn,openRedmondDetails} from '../scripts/redmond-recovery.ts';
+import {openRedmondSignIn,openRedmondDetails,withRedmondAttempts} from '../scripts/redmond-recovery.ts';
 import {redmondHome,resolveRedmondPermitUrl} from '../lib/energov.ts';
 const browser=await chromium.launch();
 const number='CGP-2025-07539';
@@ -53,6 +53,26 @@ try{
  });
  await scenario('wrong permit never becomes a valid snapshot',()=>details().replace(number,'CGP-2025-07530'),async({page,step,sleep,delays})=>{
   await assert.rejects(openRedmondDetails(page,url,number,step,sleep),{kind:'permit-mismatch'});assert.deepEqual(delays,[]);
+ });
+ await scenario('timeout then portal dialog retries in a fresh session',visit=>visit===1?greeting:visit===2?details()+'<div id="globalMessageDialog">SECRET private source message</div>':details(),async({page,steps,delays,sleep})=>{
+  const logs=[];let attempts=0;
+  const result=await withRedmondAttempts(number,async step=>{
+   attempts++;
+   // The real reader creates a fresh browser per attempt; use a fresh page here,
+   // retaining the mocked context route so every request stays intercepted.
+   const attemptPage=attempts===1?page:await page.context().newPage();
+   attemptPage.setDefaultTimeout(1200);
+   try{return await openRedmondDetails(attemptPage,url,number,async(name,op)=>{steps.push(name);return step(name,op);},sleep);}
+   finally{if(attemptPage!==page)await attemptPage.close();}
+  },{sleep,log:line=>logs.push(line),now:Date.now});
+  assert.equal(result,'Mock project');assert.equal(attempts,2);assert.deepEqual(delays,[2000,5000]);
+  assert.ok(logs.some(line=>JSON.parse(line).result==='source-dialog'));assert.doesNotMatch(logs.join('\n'),/SECRET|private source message/);
+ });
+ await scenario('hidden dialog template does not reject healthy details',()=>details()+'<div id="globalMessageDialog" style="display:none">Hidden</div>',async({page,step,sleep,delays})=>{
+  assert.equal(await openRedmondDetails(page,url,number,step,sleep),'Mock project');assert.deepEqual(delays,[]);
+ });
+ await scenario('duplicate dialog templates still report a visible source error',()=>details()+'<div id="globalMessageDialog" style="display:none">Hidden</div><div id="globalMessageDialog">SECRET</div>',async({page,step,sleep,delays})=>{
+  await assert.rejects(openRedmondDetails(page,url,number,step,sleep),{kind:'source-dialog'});assert.deepEqual(delays,[]);
  });
  console.log(`Verified ${verified} Redmond navigation scenarios.`);
 }finally{await browser.close();}

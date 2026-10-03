@@ -5,14 +5,14 @@ type Step = 'browser startup' | 'home navigation' | 'home reload' | 'sign-in rea
  'login link' | 'sign-in confirmation' | 'email entry' | 'email next' |
  'password selection' | 'password entry' | 'password verify' | 'sign-in return' |
  'signed-in readiness' | 'permit search' | 'permit search entry' | 'permit search result' |
- 'details navigation' | 'details reload' | 'permit identity' | 'details overlay' |
+ 'details navigation' | 'details reload' | 'permit identity' | 'details overlay' | 'details source dialog' |
  'project field' | 'permit location' | 'inspection checklist' | 'inspection history' | 'normalization';
-type Kind = 'timeout' | 'session-expired' | 'permit-mismatch' | 'failed';
+type Kind = 'timeout' | 'session-expired' | 'source-dialog' | 'selector-ambiguity' | 'permit-mismatch' | 'failed';
 export class RedmondReadError extends Error {
  readonly kind:Kind;
  constructor(kind:Kind){super(`Redmond read ${kind}.`);this.kind=kind;}
 }
-const kindOf=(error:unknown):Kind=>error instanceof RedmondReadError?error.kind:error instanceof Error&&error.name==='TimeoutError'?'timeout':'failed';
+const kindOf=(error:unknown):Kind=>error instanceof RedmondReadError?error.kind:error instanceof Error&&error.name==='TimeoutError'?'timeout':error instanceof Error&&error.message.includes('strict mode violation')?'selector-ambiguity':'failed';
 export const pause=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 type Runtime={sleep:(ms:number)=>Promise<void>;log:(message:string)=>void;now:()=>number};
 const defaults:Runtime={sleep:pause,log:message=>console.log(message),now:Date.now};
@@ -33,7 +33,7 @@ export async function withRedmondAttempts<T>(number:string,read:(step:ReadStep)=
   try{const result=await read(step);runtime.log(JSON.stringify({source:'Redmond',permit,attempt,result:'ok',elapsedMs:runtime.now()-started}));return result;}
   catch(error){
    const kind=kindOf(error);failures.push(`attempt ${attempt}: ${current} (${kind}, ${runtime.now()-started}ms)`);
-   if(attempt===2||!['timeout','session-expired'].includes(kind))throw Error(`Redmond could not refresh ${permit}; ${failures.join('; ')}. Check source availability and saved account access.`);
+   if(attempt===2||!['timeout','session-expired','source-dialog'].includes(kind))throw Error(`Redmond could not refresh ${permit}; ${failures.join('; ')}. Check source availability and saved account access.`);
    runtime.log(JSON.stringify({source:'Redmond',permit,attempt,result:'retry',delayMs:5000}));
    await runtime.sleep(5000);
   }
@@ -91,8 +91,15 @@ export async function openRedmondDetails(page:Page,url:string,number:string,step
   });
   await step('details overlay',async()=>{
    await page.locator('#overlay').waitFor({state:'hidden'});
-   if(await page.locator('#globalMessageDialog').isVisible())throw new RedmondReadError('failed');
   });
+  await step('details source dialog',()=>checkRedmondSourceDialog(page));
   return step('project field',async()=>(await page.locator('#label-PermitDetail-ProjectName').innerText()).replace(/^[^:]+:\s*/,'').trim());
  },sleep);
+}
+
+// A source message means this read is not trustworthy, even if the permit heading
+// loaded. Do not dismiss it or expose its potentially private text in diagnostics.
+// Restart once in a fresh browser; persistent messages still fail the entire sync.
+export async function checkRedmondSourceDialog(page:Page):Promise<void>{
+ if(await page.locator('#globalMessageDialog:visible').count())throw new RedmondReadError('source-dialog');
 }
