@@ -33,8 +33,9 @@ export function InspectionManagement({permit,onUpdate,children,enabled=true}:{pe
  }
  async function unlock(){const access=await api<{writesEnabled:boolean}>('/access');setWritesEnabled(access.writesEnabled);setUnlocked(true);await loadSelection();}
  async function review(){if(!intent)return;const r:Result=await api<Result>('/review',{target:{city:permit.city,number:permit.number},intent});localStorage.setItem(recoveryKey,r.id);setResult(r);setAck(false);}
- async function confirm(){if(!result||!ack)return;const id=result.id;setResult({...result,state:'submitting',message:'Submitting once and checking the source portal…'});let r:Result;try{r=await api<Result>('/confirm',{id,confirm:true});}catch{setResult({...result,state:'unknown',message:'Connection lost. The request may have reached the source portal. Check the result before doing anything else.'});return;}setResult(r);if(r.state==='succeeded')await read();}
- async function check(){if(!result)return;const r:Result=await api('/operations/'+result.id);setResult(r);if(r.state==='succeeded')await read();}
+ async function refreshConfirmed(){try{await read();}catch{setError('Your inspection change was confirmed. The display could not refresh. Do not submit the request again.');}}
+ async function confirm(){if(!result||!ack)return;const id=result.id;setResult({...result,state:'submitting',message:'Submitting once and checking the source portal…'});let r:Result;try{r=await api<Result>('/confirm',{id,confirm:true});}catch{setResult({...result,state:'unknown',message:'Connection lost. The request may have reached the source portal. Check the result before doing anything else.'});return;}setResult(r);if(r.state==='succeeded')await refreshConfirmed();}
+ async function check(){if(!result)return;const r:Result=await api('/operations/'+result.id);setResult(r);if(r.state==='succeeded')await refreshConfirmed();}
  const unresolved=!!result&&['submitting','unknown'].includes(result.state);
  function chooseAction(name:string,current:View,preserveContact=false){
   const booking=current.scheduled.find(r=>r.Description===name);
