@@ -3,6 +3,7 @@ import permits from '../permits.json' with {type:'json'};
 import {jurisdictions,mergeInspections} from '../lib/inspections.ts';
 import {httpGateway,prepare,type Intent,type Target,type Gateway} from './mbp.ts';
 import {execute,reconcile,type Operation,type Store} from './actions.ts';
+import {withDeadline,PortalReadTimeout,finishPortalSession} from './deadline.ts';
 type Env={DB:D1Database;ADMIN_TOKEN:string;ALLOWED_ORIGIN:string;WRITES_ENABLED?:string;BROWSER?:Fetcher;PORTAL_CREDENTIALS?:string};
 export function store(db:D1Database):Store{return {
  async get(id){const row=await db.prepare('SELECT data FROM operations WHERE id=?').bind(id).first<{data:string}>();return row?JSON.parse(row.data):null;},
@@ -17,7 +18,7 @@ export function store(db:D1Database):Store{return {
 function target(value:unknown):Target {const v=value as {city?:unknown;number?:unknown};const permit=v&&permits.find(p=>p.city===v.city&&p.number===v.number);if(!permit||typeof v.city!=='string'||typeof v.number!=='string'||!(v.city in jurisdictions))throw Error('Choose a tracked permit.');return {city:v.city,number:v.number,jurisdiction:jurisdictions[v.city],...('sourceId' in permit?{sourceId:permit.sourceId}: {})};}
 
 const publicOperation=(op:Operation)=>({id:op.id,state:op.state,message:op.message,label:op.action.label,target:op.action.target,intent:op.action.intent,expires:op.expires});
-export default {async fetch(request:Request,env:Env):Promise<Response>{
+export default {async fetch(request:Request,env:Env,context?:{waitUntil:(work:Promise<unknown>)=>void}):Promise<Response>{
  const origin=request.headers.get('Origin');
  const headers={'Access-Control-Allow-Origin':env.ALLOWED_ORIGIN,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Cache-Control':'no-store','Vary':'Origin'};
  const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
@@ -31,9 +32,11 @@ export default {async fetch(request:Request,env:Env):Promise<Response>{
  function adapter(t:Target){if(t.jurisdiction!==0)return mbp;if(!env.BROWSER||!env.PORTAL_CREDENTIALS)throw Error('Secure portal scheduling is not configured.');if(!portal)portal=portalGateway(async()=>{const {launch}=await import('@cloudflare/playwright');try{return await launch(env.BROWSER!) as unknown as import('playwright').Browser;}catch(error){const message=error instanceof Error?error.message:'';if(message.includes('Rate limit exceeded')){await new Promise(resolve=>setTimeout(resolve,21000));return await launch(env.BROWSER!) as unknown as import('playwright').Browser;}throw Error(message.includes('time limit exceeded')?'Secure browser daily allowance reached. No request was submitted. Try again after the allowance resets.':'Secure browser could not start. No request was submitted.');}},JSON.parse(env.PORTAL_CREDENTIALS));return portal;}
  const gateway:Gateway={read:(t,name)=>adapter(t).read(t,name),send:action=>adapter(action.target).send(action)};
  const storage=store(env.DB),url=new URL(request.url);
+ // Bound only pre-submission reads. Never race or retry a confirmation write.
+ const readForReview=(t:Target,name?:string)=>t.city==='Clyde Hill'?withDeadline(gateway.read(t,name),45000,new PortalReadTimeout()):gateway.read(t,name);
  try{
   if(request.method==='GET'&&url.pathname==='/live'){
-   const t=target(Object.fromEntries(url.searchParams));const inspection=url.searchParams.get('inspection')||undefined;if(inspection&&inspection.length>300)throw Error('Invalid inspection name.');const live=await gateway.read(t,inspection);return json({...live,inspections:live.inspections||mergeInspections(live.available,live.scheduled,live.history),fetchedAt:new Date().toISOString(),writesEnabled:env.WRITES_ENABLED==='true'});
+   const t=target(Object.fromEntries(url.searchParams));const inspection=url.searchParams.get('inspection')||undefined;if(inspection&&inspection.length>300)throw Error('Invalid inspection name.');const live=await readForReview(t,inspection);return json({...live,inspections:live.inspections||mergeInspections(live.available,live.scheduled,live.history),fetchedAt:new Date().toISOString(),writesEnabled:env.WRITES_ENABLED==='true'});
   }
   if(request.method==='GET'&&/^\/operations\/[a-f0-9-]{36}$/.test(url.pathname)){
    const op=await storage.get(url.pathname.split('/').at(-1)!);return op?json(publicOperation(await reconcile(op,storage,gateway))):json({error:'Request not found.'},404);
@@ -46,9 +49,9 @@ export default {async fetch(request:Request,env:Env):Promise<Response>{
   if(url.pathname==='/review'){
    const t=target(body.target);const intent=body.intent as Intent;
    if(!intent||Object.entries(intent).some(([k,v])=>!['kind','description','date','bookingId','name','phone','email','message','timeSlot'].includes(k)||typeof v!=='string'||v.length>300))throw Error('Invalid inspection request.');
-   const action=prepare(t,intent,await gateway.read(t,intent.description));const op:Operation={id:crypto.randomUUID(),action,state:'review',message:'Review details. Nothing has been submitted.',expires:Date.now()+5*60*1000};await storage.put(op);return json(publicOperation(op));
+   const action=prepare(t,intent,await readForReview(t,intent.description));const op:Operation={id:crypto.randomUUID(),action,state:'review',message:'Review details. Nothing has been submitted.',expires:Date.now()+5*60*1000};await storage.put(op);return json(publicOperation(op));
   }
   if(body.confirm!==true||typeof body.id!=='string'||! /^[a-f0-9-]{36}$/.test(body.id))throw Error('Explicit confirmation is required.');
   return json(publicOperation(await execute(body.id,storage,gateway)));
- }catch(error){return json({error:error instanceof Error?error.message:'Unable to complete the request.'},400);}finally{await portal?.close?.().catch(()=>{});}
+ }catch(error){return json({error:error instanceof Error?error.message:'Unable to complete the request.'},error instanceof PortalReadTimeout?504:400);}finally{await finishPortalSession(async()=>{await portal?.close?.();},context);}
 }};
