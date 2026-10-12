@@ -100,3 +100,11 @@ test('backend rejects untrusted origins and unauthenticated requests before stor
  assert.equal((await worker.fetch(new Request('https://backend.invalid/confirm',{method:'POST',headers:{Origin:env.ALLOWED_ORIGIN}}),env)).status,401);
  assert.equal((await worker.fetch(new Request('https://backend.invalid/confirm',{method:'POST',headers:{Origin:env.ALLOWED_ORIGIN,Authorization:'Bearer '+env.ADMIN_TOKEN,'Content-Type':'application/json'},body:'{}'}),env)).status,503);
 });
+
+test('unlock verifies the key without accessing a portal or database',async()=>{
+ const env={ALLOWED_ORIGIN:'https://binbinbinbinlu.github.io',ADMIN_TOKEN:'a'.repeat(40),WRITES_ENABLED:'true',DB:new Proxy({},{get(){throw Error('Unlock must not use storage');}}) as D1Database};
+ const headers={Origin:env.ALLOWED_ORIGIN,Authorization:'Bearer '+env.ADMIN_TOKEN};
+ const response=await worker.fetch(new Request('https://backend.invalid/access',{headers}),env);
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),{writesEnabled:true});
+ assert.equal((await worker.fetch(new Request('https://backend.invalid/access',{headers:{...headers,Authorization:'Bearer wrong'}}),env)).status,401);
+});
