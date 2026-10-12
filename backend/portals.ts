@@ -7,13 +7,20 @@ import {redmondHome,redmondBase,resolveRedmondPermitUrl,normalizeEnergov} from '
 
 export type PortalCredentials={username:string;password:string};
 export type BrowserFactory=()=>Promise<Browser>;
+export function clydeRowsForRead<T extends {name:string}>(rows:T[],name?:string){
+ const indexed=rows.map((row,index)=>({...row,sourceIndex:index}));
+ if(!name)return indexed;
+ const selected=indexed.filter(row=>row.name===name);
+ if(selected.length!==1)throw Error('Clyde Hill did not return exactly one matching inspection.');
+ return selected;
+}
 const us=(date:string)=>{const [y,m,d]=date.split('-');return `${m}/${d}/${y}`;};
 const offer=(name:string,id:string,dates:string[]):Offer=>({Description:name,InspectionId:id,InspectionType:'Building',InspectionDates:dates,InspectionRestricted:false,CancellationPhoneNumber:null});
 function snapshot(inspections:Inspection[],available:Offer[]):Live{
  const scheduled:Booking[]=inspections.filter(r=>/^(scheduled|requested|pending inspection)$/i.test(r.sourceStatus)&&r.date).map(r=>({UniqueId:r.id,Description:r.name,InspectionDate:r.date,InspectionType:null,ConfirmationNumber:null,InspectionCancellable:false}));
  return {inspections,available,scheduled,history:inspections.flatMap(r=>r.history)};
 }
-export function portalGateway(launch:BrowserFactory,credentials:PortalCredentials):Gateway{
+export function portalGateway(launch:BrowserFactory,credentials:PortalCredentials,focusedClyde=false):Gateway{
  let browser:Browser|undefined,page:Page|undefined,currentTarget:Target|undefined,currentInspection='',step='open the portal';
  async function getPage(){if(!page){browser=await launch();page=await browser.newPage();page.setDefaultTimeout(45000);}return page;}
  async function medina(t:Target,name?:string):Promise<Live>{
@@ -51,15 +58,17 @@ export function portalGateway(launch:BrowserFactory,credentials:PortalCredential
   await p.locator('button').filter({hasText:'CLICK TO SEARCH'}).click();await p.locator('input[name="citizenSearch.search_text"]').fill(t.number);await p.locator('button').filter({hasText:/^\s*SEARCH\s*$/i}).click();await p.getByRole('link',{name:t.number,exact:true}).click();
   const table=p.locator('table').filter({has:p.locator('th[title="Insp ID"]')});await table.waitFor();
   const rows=await table.locator('tbody tr').evaluateAll(es=>es.map(e=>{const c=Array.from(e.querySelectorAll('td'));return {status:c[0]?.textContent?.trim()||'',schedule:c[2]?.textContent?.trim()||'',id:c[3]?.textContent?.trim()||'',name:c[4]?.textContent?.trim()||'',canSchedule:!!c[2]?.querySelector('.bi-calendar3'),hasComments:!!c[1]?.querySelector('a'),history:[] as History[]};}));
-  for(const [index,row] of rows.entries())if(row.hasComments){
+  const selectedRows=clydeRowsForRead(rows,focusedClyde?name:undefined);
+  for(const row of selectedRows)if(row.hasComments){
+   const index=row.sourceIndex;
    await table.locator('tbody tr').nth(index).locator('td').nth(1).getByRole('link').click();const modal=p.locator('.modal.show').filter({hasText:'COMMENTS FOR INSPECTIONS:'});await modal.waitFor();
    if(!(await modal.locator('.modal-body').innerText()).includes(row.id))throw Error('Clyde Hill returned different inspection history.');
    const attempts=await modal.locator('.modal-body > .row').evaluateAll(es=>es.map(e=>Array.from(e.children).map(c=>c.textContent?.trim()||'')));
    for(const [date,status,notes] of attempts){if(!day(date)||!status)throw Error('Clyde Hill inspection history is incomplete.');row.history.push({Description:row.name,Date:date,Status:status,Notes:notes==='-- NO COMMENT --'?'':notes});}
    await modal.getByRole('button',{name:'Close',exact:true}).first().click();await modal.waitFor({state:'hidden'});
   }
-  const inspections=normalizePermitTrax(rows),available=rows.filter(r=>r.canSchedule).map(r=>offer(r.name,r.id,[]));
-  for(const [index,row] of rows.entries()){const booked=day(row.schedule);if(booked&&!row.canSchedule&&row.schedule!=='COMPLETE'){inspections[index].sourceStatus='Scheduled';inspections[index].status='pending';inspections[index].date=booked;}}
+  const inspections=normalizePermitTrax(selectedRows),available=selectedRows.filter(r=>r.canSchedule).map(r=>offer(r.name,r.id,[]));
+  for(const [index,row] of selectedRows.entries()){const booked=day(row.schedule);if(booked&&!row.canSchedule&&row.schedule!=='COMPLETE'){inspections[index].sourceStatus='Scheduled';inspections[index].status='pending';inspections[index].date=booked;}}
   const selected=rows.find(r=>r.name===name&&r.canSchedule);if(selected){await table.locator('tbody tr').nth(rows.indexOf(selected)).locator('.bi-calendar3').click();const modal=p.locator('.modal.show');await modal.waitFor();const text=await modal.innerText();if(!text.includes(t.number)||!text.includes(selected.id))throw Error('Clyde Hill selected a different inspection.');const rawDate=await modal.locator('input').first().inputValue();const next=day(rawDate)||(Number.isFinite(Date.parse(rawDate+' 12:00:00 GMT'))?new Date(rawDate+' 12:00:00 GMT').toISOString().slice(0,10):'');if(!next)throw Error('Clyde Hill did not return an available date.');available.find(r=>r.InspectionId===selected.id)!.InspectionDates=[next];}
   return snapshot(inspections,available);
  }

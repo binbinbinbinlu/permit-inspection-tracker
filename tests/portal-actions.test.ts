@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prepare,confirmed,type Live,type Intent,type Prepared} from '../backend/mbp.ts';
-import {submitPortalForm} from '../backend/portals.ts';
+import {submitPortalForm,clydeRowsForRead} from '../backend/portals.ts';
 import type {Page} from 'playwright';
 globalThis.fetch=(async()=>{throw Error('Real network forbidden in portal scheduling tests.');}) as typeof fetch;
+test('Clyde Hill scheduling reads only selected history while retaining its table index',()=>{
+ const rows=[{name:'Completed footing'},{name:'Completed framing'},{name:'Permit extension inspection request'}];
+ assert.deepEqual(clydeRowsForRead(rows,'Permit extension inspection request'),[{name:'Permit extension inspection request',sourceIndex:2}]);
+ assert.equal(clydeRowsForRead(rows).length,3);
+ assert.throws(()=>clydeRowsForRead(rows,'Missing'),/exactly one/);
+ assert.throws(()=>clydeRowsForRead([...rows,rows[2]],rows[2].name),/exactly one/);
+});
 const intent:Intent={kind:'schedule',description:'Footing',date:'2026-09-22',name:'Mock Contact',phone:'2065550100',email:'mock@example.invalid',message:'Mock only',timeSlot:'any'};
 const inspection={id:'footing',name:'Footing',category:'Building',status:'available' as const,sourceStatus:'Available to request',date:'',dates:[],restricted:false,restriction:'',history:[]};
 const live:Live={available:[{Description:'Footing',InspectionId:'mock-inspection',InspectionRestricted:false,InspectionDates:['2026-09-22'],CancellationPhoneNumber:null,timeSlots:[{value:'any',label:'ANY AVAILABLE'}]}],scheduled:[],history:[],inspections:[inspection]};
