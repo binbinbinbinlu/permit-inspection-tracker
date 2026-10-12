@@ -7,7 +7,7 @@ const server=await createServer({configFile:'vite.pages.config.ts',server:{host:
 const browser=await chromium.launch();
 try{
  for(const city of ['Bellevue','Clyde Hill','Medina','Redmond'])for(const outcome of ['succeeded','failed','unknown','refresh-failed']){
-  const context=await browser.newContext();const page=await context.newPage();let submits=0;let operation;let scheduled=[];let checks=0;
+  const context=await browser.newContext();const page=await context.newPage();let submits=0;let operation;let scheduled=[];let checks=0;let reviews=0;
   const inspections=[{id:'footing',name:'Footing',category:'Building',status:'available',sourceStatus:'Available to request',date:'',dates:['2026-10-01'],restricted:false,restriction:'',history:[]},{id:'final',name:'Final',category:'Building',status:'passed',sourceStatus:'Passed',date:'2026-09-01',dates:[],restricted:true,restriction:'Approved',history:[]}];
   inspections.push(...Array.from({length:40},(_,i)=>({...inspections[1],id:'passed-'+i,name:'Completed inspection '+i})));
   const permit={city,number:city==='Bellevue'?'26 112569 BR':'MOCK-PERMIT',address:'Mock address',project:'Mock project',fetchedAt:new Date().toISOString(),sourceUrl:'https://example.invalid',inspections};
@@ -18,7 +18,7 @@ try{
    if(u.pathname==='/data/permits.json')return json({permits:city==='Bellevue'?[permit]:[{...permit,city:'Bellevue',number:'26 112569 BR'},permit]});
    if(u.hostname==='mock-backend.invalid'){
     if(u.pathname==='/live'){if(outcome==='refresh-failed'&&submits)return route.fulfill({status:503,json:{error:'Mock refresh unavailable.'},headers:{'Access-Control-Allow-Origin':'*'}});return json({available:[{Description:'Footing',InspectionDates:['2026-10-01'],InspectionRestricted:false,...(city==='Medina'?{timeSlots:[{value:'any',label:'ANY AVAILABLE'}]}:{})}],scheduled,history:[],inspections,fetchedAt:permit.fetchedAt,writesEnabled:true});}
-    if(u.pathname==='/review'){operation={id:'mock-operation',state:'review',intent:req.postDataJSON().intent,label:'Mock inspection request',message:'Review details. Nothing has been submitted.'};return json(operation);}
+    if(u.pathname==='/review'){reviews++;if(reviews<=(city==='Clyde Hill'&&outcome==='failed'?2:1))return route.abort('failed');operation={id:'mock-operation',state:'review',intent:req.postDataJSON().intent,label:'Mock inspection request',message:'Review details. Nothing has been submitted.'};return json(operation);}
     if(u.pathname==='/confirm'){submits++;operation.state=outcome==='refresh-failed'?'succeeded':outcome;operation.message=operation.state==='succeeded'?(operation.intent.kind==='cancel'?'Cancelled — confirmed in MBP.':'Scheduled — confirmed in MBP.'):outcome==='failed'?'Date unavailable. Nothing was submitted.':'Result not confirmed. Do not repeat the request.';if(operation.state==='succeeded')scheduled=operation.intent.kind==='cancel'?[]:[{UniqueId:'mock-booking',Description:'Footing',InspectionDate:'2026-10-01',InspectionType:null,ConfirmationNumber:null,InspectionCancellable:city==='Bellevue'}];return json(operation);}
     if(u.pathname.startsWith('/operations/')){checks++;return json(operation);}
    }
@@ -37,6 +37,8 @@ try{
   await phone.fill('4252240399');
   assert.equal(await phone.evaluate(input=>input.checkValidity()),true);
   await page.getByLabel('Date',{exact:true}).selectOption('2026-10-01');if(city==='Medina')await page.getByLabel('Time slot',{exact:true}).selectOption('any');await page.getByLabel('Site contact name').fill('Mock Contact');await page.getByLabel('Phone (10 digits)').fill('\u200B+1 (425) 224-0399\u00A0');await page.getByLabel('Email',{exact:true}).fill('mock@example.invalid');await page.getByRole('button',{name:'Review request — does not submit'}).click();
+  if(city==='Clyde Hill'&&outcome==='failed'){await page.getByRole('alert').filter({hasText:'No inspection was submitted.'}).waitFor();assert.equal(submits,0);assert.equal(await phone.inputValue(),'4252240399');await page.getByRole('button',{name:'Review request — does not submit'}).click();}
+  await page.getByRole('button',{name:'Confirm scheduling'}).waitFor();
   assert.equal(operation.intent.phone,'4252240399');
   const confirm=page.getByRole('button',{name:'Confirm scheduling'});await confirm.waitFor();assert.equal(submits,0);assert.equal(await confirm.isDisabled(),true);
   await page.getByRole('checkbox').check();await confirm.click();await page.getByText(operation.message,{exact:true}).waitFor();assert.equal(submits,1);

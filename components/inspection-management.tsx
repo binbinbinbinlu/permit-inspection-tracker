@@ -3,6 +3,7 @@ import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 
 import type {Inspection,PermitData} from '../lib/inspections';
 import type {Live,Intent} from '../backend/mbp';
 import {normalizeContactPhone} from '../lib/contact-phone';
+import {inspectionApi} from '../lib/inspection-api';
 type View=Live & {inspections:Inspection[];fetchedAt:string;writesEnabled:boolean};
 type Result={id:string;state:string;message:string;label:string;intent:Intent;expires:number};
 const backend=process.env.NEXT_PUBLIC_ACTIONS_URL||'';
@@ -17,7 +18,7 @@ export function InspectionManagement({permit,onUpdate,children,enabled=true}:{pe
  useEffect(()=>{const panel=actionRef.current;if(dialogRef.current?.open&&panel&&(intent||result)){panel.focus({preventScroll:true});panel.scrollIntoView({block:'start'});}},[openCount,result?.id,result?.state]);
  useEffect(()=>{if(error){errorRef.current?.focus({preventScroll:true});errorRef.current?.scrollIntoView({block:'center'});}},[error]);
  const recoveryKey=`permit-action:${permit.city}:${permit.number}`;
- async function api<T>(path:string,body?:unknown):Promise<T>{const response=await fetch(backend+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${key}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(180000)});const data=await response.json() as T & {error?:string};if(!response.ok)throw Error(data.error||'Backend request failed.');return data;}
+ async function api<T>(path:string,body?:unknown):Promise<T>{return inspectionApi<T>({base:backend,key,path,body});}
  async function read(){const data:View=await api<View>('/live?'+new URLSearchParams({city:permit.city,number:permit.number,inspection:selectedName.current}));setLive(data);onUpdate({inspections:data.inspections,fetchedAt:data.fetchedAt});return data;}
  async function run(work:()=>Promise<void>){setBusy(true);setError('');try{await work();}catch(e){setError(e instanceof Error?e.message:'Request failed.');}finally{setBusy(false);}}
  async function unlock(){const fresh=await read();const saved=localStorage.getItem(recoveryKey);if(saved){const recovered=await api<Result>('/operations/'+saved);setIntent(recovered.intent);setResult(recovered);}else chooseAction(selectedName.current,fresh);}
